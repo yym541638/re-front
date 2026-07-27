@@ -1,0 +1,56 @@
+export const unitMenuAll = {
+    code: 0,
+    data: [
+        {
+            id: "1422793968709890050",
+            parentId: "1422793829500940290",
+            sort: "1",
+            name: "#1机组",
+            Code: "",
+            Type: "4",
+            TypeName: "机组菜单",
+            Url: "/thermaloneoverview",
+            RouterName: "thermaloneoverview",
+            PermIcon: "",
+        },
+        {
+            id: "1433256301026349058",
+            parentId: "1422793829500940290",
+            sort: "2",
+            name: "#2机组",
+            Code: "",
+            Type: "4",
+            TypeName: "机组菜单",
+            Url: "/sd_thermaloneoverview",
+            RouterName: "sd_thermaloneoverview",
+            PermIcon: "",
+        },
+        {
+            id: "1628614595755429890",
+            parentId: "1628613120408997890",
+            sort: "1",
+            name: "#1机组",
+            Code: "通流故障诊断/#1机组/通流特性诊断",
+            Type: "4",
+            TypeName: "机组菜单",
+            Url: "/diagnosis",
+            RouterName: "diagnosis",
+            PermIcon: "",
+        },
+        {
+            id: "1628614824336609282",
+            parentId: "1628613120408997890",
+            sort: "2",
+            name: "#2机组",
+            Code: "通流故障诊断/#2机组/通流特性诊断",
+            Type: "4",
+            TypeName: "机组菜单",
+            Url: "/diagnosistwo",
+            RouterName: "diagnosistwo",
+            PermIcon: "",
+        },
+    ], 
+    "msg": "操作成功"
+}
+
+

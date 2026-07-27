@@ -1,0 +1,43 @@
+@charset "utf-8";
+/* CSS Document */
+html, body, ul, li, ol, dl, dd, dt, p, h1, h2, h3, h4, h5, h6, form, fieldset, legend, img { margin:0; padding:0; }
+ 
+fieldset, c{ border:none; }
+ 
+img{display: block;}
+ 
+address, caption, cite, code, dfn, th, var { font-style:normal; font-weight:normal; }
+ 
+ul, ol ,li{ list-style:none; }
+ 
+body { color:#333; ;font:12px "BASE","宋体","Arial Narrow",HELVETICA ; background:#fff;}
+/* */
+
+a { color:#666; text-decoration:none; }
+/*清除浮动*/
+.clear{clear:both}
+*{box-sizing:border-box}
+
+/*滚动条样式*/
+::-webkit-scrollbar{
+    /* display:none; */
+    }
+body,html{
+    --mainColor:red;
+    height: 100%;
+    /* min-width:1280px;  */
+
+    /* -ms-scroll-chaining: chained;
+    -ms-overflow-style: none;
+    -ms-content-zooming: zoom;
+    -ms-scroll-rails: none;
+    -ms-content-zoom-limit-min: 100%;
+    -ms-content-zoom-limit-max: 500%;
+    -ms-scroll-snap-type: proximity;
+    -ms-scroll-snap-points-x: snapList(100%, 200%, 300%, 400%, 500%);
+    -ms-overflow-style: none;
+    overflow: auto; */
+    overflow: auto;
+
+}
+

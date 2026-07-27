@@ -1,0 +1,146 @@
+@mixin flex-center($direction:center){
+    display: flex;
+     align-items: center;
+     justify-content: $direction;
+   }
+@mixin flex-clo{
+display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+//   按钮组
+.filtrate {
+  background: #fff;
+  width: 100%;
+  height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 32px 0;
+  border-bottom: 1px solid #EEEEEE;
+  .btn_group {
+    display: flex;
+  }
+  .title {
+    font-family: PingFangSC-Medium;
+    font-size: 16px;
+    color: #262626;
+    line-height: 24px;
+    font-weight: bold;
+  }
+  // /deep/ .title {
+  //   margin: 0;
+  // }
+}
+// 选项组
+.selec_group {
+  background: #fff;
+  width: 100%;
+  padding: 24px 32px 48px;
+  display: flex;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  /deep/ .el-input,
+  /deep/ .el-input__inner,
+  /deep/ .el-input__suffix {
+    height: 32px;
+    display: flex;
+    line-height: 32px;
+    /deep/ .el-input__icon{
+      line-height: 32px;
+      height: 32px;
+    }
+   
+  }
+  /deep/ .el-date-editor .el-range-separator{
+    height: 32px;
+    width: 20px!important;
+    line-height: 32px;
+    
+  }
+  .w_2{
+    width: 224px;
+  }
+  .w_1{
+    width: 100%;
+  }
+  .selec_card {
+    width: 294px;
+    height: auto;
+    margin-right: 32px;
+    margin-bottom: 24px;
+    .el-date-editor .el-range-separato {
+      
+      // display: flex;
+      // align-items: center;
+    
+    }
+    .selec {
+      width: 100%;
+      display: flex;
+    align-items: center;
+    }
+    .selec_label {
+      font-family: PingFangSC-Regular;
+      font-size: 14px;
+      color: #262626;
+      line-height: 38px;
+    }
+  }
+}
+
+ // 分页
+ .curpage {
+  width: 100%;
+  display: flex;
+  padding: 48px 56px 0;
+  align-items: center;
+  justify-content: flex-end;
+  /deep/ .number {
+    background: transparent;
+    border: 1px solid #ddd;
+  }
+  /deep/ .active {
+    background: #1890ff;
+    color: #fff;
+  }
+  /deep/ .el-input__inner, /deep/ .el-input{
+    height: 30px;
+  }
+  .jump{
+    width: 48px;
+    height: 30px;
+    margin: 0 8px;
+  }
+  
+}
+
+/deep/ .el-dialog__header {
+  border-bottom: 1px solid #ddd !important;
+}
+
+// 宽度100%
+.wt{
+  width:100%
+}
+
+//手光标
+.cursor:hover{
+  color: #409EFF;
+  cursor:pointer;
+}
+
+//form
+.dia_form{
+  width: 80%;
+  height: 100%;
+  // /deep/
+  //   .el-form-item.is-required:not(.is-no-asterisk)
+  //   > .el-form-item__label:before {
+  //   content: "";
+  // }
+  .dia_item{
+    width: 100%;
+  }
+}
