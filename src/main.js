@@ -117,8 +117,16 @@ Vue.use(vueEsign);
 import VXETable from "vxe-table";
 import "vxe-table/lib/style.css";
 Vue.use(VXETable);
+import { getSystemRole } from "./utils/roles";
 // 测试阶段：放开路由；真实接口仍需登录拿到 token
 router.beforeEach((to, from, next) => {
+  // 系统级页面：仅公司管理员可进
+  if (to.meta && to.meta.requireSystemRole) {
+    if (getSystemRole() !== to.meta.requireSystemRole) {
+      next({ name: "ProjectOverview" });
+      return;
+    }
+  }
   // TODO: 测试结束后恢复完整登录校验
   next();
 });

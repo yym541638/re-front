@@ -3,7 +3,12 @@
     <div class="cm-page__body">
       <div class="cm-toolbar">
         <div class="cm-toolbar__left">
-          <el-button class="cm-btn-primary" type="primary" @click="openSpec('create')">
+          <el-button
+            v-if="canCreateProject"
+            class="cm-btn-primary"
+            type="primary"
+            @click="openSpec('create')"
+          >
             New
           </el-button>
           <el-button class="cm-btn-secondary" @click="inviteCodeVisible = true">
@@ -252,15 +257,14 @@
 </template>
 
 <script>
+import { isCompAdmin } from "../utils/roles";
+
 const defaultUsers = () => [
-  { role: "Administrator", name: "", userId: "" },
-  { role: "Project Owner", name: "", userId: "" },
-  { role: "Document Owner", name: "", userId: "" },
-  { role: "Internal User", name: "", userId: "" },
-  { role: "Internal User", name: "", userId: "" },
-  { role: "Internal User", name: "", userId: "" },
-  { role: "External User", name: "", userId: "" },
-  { role: "External User", name: "", userId: "" },
+  { role: "Project Owner", roleCode: "PROJECT_OWNER", name: "", userId: "" },
+  { role: "Document Owner", roleCode: "DOCUMENT_OWNER", name: "", userId: "" },
+  { role: "General User", roleCode: "GENERAL_USER", name: "", userId: "" },
+  { role: "Manager tier 1", roleCode: "MANAGER", name: "", userId: "" },
+  { role: "Manager tier 2", roleCode: "MANAGER_2", name: "", userId: "" },
 ];
 
 const emptyForm = () => ({
@@ -307,6 +311,9 @@ export default {
     specTitle() {
       return "Project specification";
     },
+    canCreateProject() {
+      return isCompAdmin();
+    },
   },
   created() {
     this.VoPageListByDto(1);
@@ -334,7 +341,7 @@ export default {
           if (!userId) return;
           members.push({
             userId,
-            memberRole: user.role,
+            memberRole: user.roleCode || user.role,
             displayName: names[idx] || names[0] || "",
           });
         });
@@ -343,10 +350,15 @@ export default {
     },
     mapRoleSlotsToUsers(roleSlots, members) {
       const users = defaultUsers();
-      const source = (roleSlots && roleSlots.length ? roleSlots : null) || [];
+      const source = ((roleSlots && roleSlots.length ? roleSlots : null) || [])
+        .filter((slot) => {
+          const code = slot.role_code || slot.roleCode || "";
+          return code !== "COMP_ADMIN" && code !== "administrator";
+        });
       if (source.length) {
         return source.map((slot) => ({
-          role: slot.role_name || slot.role_code || "Internal User",
+          role: slot.role_name || slot.roleName || slot.role_code || "General User",
+          roleCode: slot.role_code || slot.roleCode || "",
           name: slot.display_name || "",
           userId: slot.user_id || "",
           email: slot.email || "",
@@ -402,6 +414,10 @@ export default {
       this.specMode = mode;
       this.editingProjectId = null;
       if (mode === "create") {
+        if (!isCompAdmin()) {
+          this.$message.warning("Only company administrators can create projects");
+          return;
+        }
         this.formData = emptyForm();
         try {
           const slotRes = await this.$api.projectRoleSlots({});

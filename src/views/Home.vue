@@ -67,6 +67,7 @@ import { mapState } from "vuex";
 import Aside from "./Home/aside.vue";
 import Header from "./Home/header.vue";
 import { equMenuAll } from "../utils/equMenu";
+import { refreshSystemRole, persistSystemRole } from "../utils/roles";
 export default {
   data() {
     return {
@@ -78,6 +79,7 @@ export default {
       isCollapse: false,
       unitParent: {}, //机组父级
       equMenu: [],
+      roleReady: false,
     };
   },
   components: {
@@ -93,8 +95,32 @@ export default {
       return this.$store.state.whichName;
     },
   },
-  created() {
+  async created() {
     this.equMenu = equMenuAll;
+    // 进入系统时刷新系统角色，保证 System Users 菜单可见性正确
+    try {
+      await refreshSystemRole(this.$api);
+      // 过渡：当前邮箱账号强制管理员（后端补齐 system_role 后可删）
+      const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
+      const identity = [
+        info.email,
+        info.account,
+        info.username,
+        info.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (identity.includes("83261582@qq.com")) {
+        persistSystemRole("COMP_ADMIN");
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    this.roleReady = true;
+    this.$nextTick(() => {
+      if (this.$refs.Aside) this.$refs.Aside.$forceUpdate();
+    });
     // 初始化页签数据
     if (sessionStorage.getItem("tags")) {
       try {

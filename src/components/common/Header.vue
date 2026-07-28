@@ -24,10 +24,10 @@
         </span>
         <el-dropdown-menu slot="dropdown" class="custom-dropdown-menu">
           <el-dropdown-item command="soc2"
-            >soc2 <i class="el-icon-right"></i
+            >SOC2 <i class="el-icon-right"></i
           ></el-dropdown-item>
           <el-dropdown-item command="iso"
-            >iso <i class="el-icon-right"></i
+            >ISO <i class="el-icon-right"></i
           ></el-dropdown-item>
         </el-dropdown-menu>
       </el-dropdown>
@@ -207,6 +207,7 @@ export default {
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("userInfo");
       sessionStorage.removeItem("purchase_status");
+      sessionStorage.removeItem("system_role");
       localStorage.removeItem("account");
       sessionStorage.removeItem("tags");
       this.$store.commit("UPDATE_TAGS", [

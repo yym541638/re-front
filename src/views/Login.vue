@@ -102,6 +102,11 @@
 <script>
 import { mapActions } from "vuex";
 import CommonHeader from "../components/common/Header.vue";
+import {
+  persistSystemRole,
+  extractSystemRole,
+  refreshSystemRole,
+} from "../utils/roles";
 
 export default {
   name: "Login",
@@ -157,16 +162,43 @@ export default {
           if (!userInfo.userId && userInfo.id != null) {
             userInfo.userId = userInfo.id;
           }
+          let systemRole =
+            extractSystemRole(salt.data) ||
+            extractSystemRole(userInfo) ||
+            "";
+          if (!userInfo.email && String(this.info.account).includes("@")) {
+            userInfo.email = this.info.account;
+          }
+          sessionStorage.setItem("userInfo", JSON.stringify(userInfo));
+
+          // 登录未带明确系统角色时，拉 /auth/me、公司档案补齐
+          if (!systemRole) {
+            systemRole = await refreshSystemRole(this.$api);
+          }
+          // 过渡：指定主账号默认公司管理员
+          const account = String(this.info.account || "").toLowerCase();
+          if (systemRole !== "COMP_ADMIN" && account === "83261582@qq.com") {
+            systemRole = "COMP_ADMIN";
+          }
+          if (!systemRole) {
+            systemRole = "COMP_USER";
+          }
+          systemRole = persistSystemRole(systemRole);
+          userInfo.systemRole = systemRole;
+          userInfo.system_role = systemRole;
           sessionStorage.setItem("userInfo", JSON.stringify(userInfo));
           sessionStorage.setItem(
             "purchase_status",
-            String(salt.data.purchase_status != null ? salt.data.purchase_status : 0),
+            String(
+              salt.data.purchase_status != null
+                ? salt.data.purchase_status
+                : 0,
+            ),
           );
-          // 未购服务 → 购买页；已购 → 系统首页
           if (salt.data.purchase_status == 0) {
             this.$router.push({ path: "/purchase", query: { product: "soc2" } });
           } else {
-            this.$router.push({ path: "/home" });
+            this.$router.push({ path: "/products", query: { product: "soc2" } });
           }
         } else {
           this.$message({

@@ -104,6 +104,16 @@ const parents = [
     component: resolve => require(["@/views/ProjectSettings.vue"], resolve),
   },
   {
+    path: '/SystemUsers',
+    name: "SystemUsers",
+    meta: {
+      name: "SystemUsers",
+      id: '1528549913133977602',
+      requireSystemRole: 'COMP_ADMIN',
+    },
+    component: resolve => require(["@/views/SystemUsers.vue"], resolve),
+  },
+  {
     path: '/datamanage',
     name: "datamanage",
     meta: {

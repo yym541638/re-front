@@ -56,6 +56,9 @@ export const invitationCodeValidate = (params) =>
   http("get", `/invitation-code/validate`, params);
 export const invitationCodeCreate = (params) =>
   http("post", `/invitation-code/project/create`, params);
+/** 公司级邀请码（系统用户入公司） */
+export const companyInvitationCreate = (params) =>
+  http("post", `/invitation-code/company/create`, params);
 export const invitationCodeRevoke = (invitationId, params) =>
   http("post", `/invitation-code/revoke/${invitationId}`, params);
 
@@ -216,6 +219,9 @@ export const userInfo = (params) => http("get", `/user/info`, params);
 export const updateUserInfo = (params) => http("put", `/user/info`, params);
 export const userList = (params) => http("get", `/user/list`, params);
 export const userRoles = (params) => http("get", `/user/roles`, params);
+/** 更新公司用户系统角色 */
+export const updateUserSystemRole = (userId, params) =>
+  http("put", `/user/${userId}/system-role`, params);
 
 /* ===================== 兼容旧叶片接口名（后端已无对应路径时保留空实现避免报错） ===================== */
 export const getStateInv = (params) =>

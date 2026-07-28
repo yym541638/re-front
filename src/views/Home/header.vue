@@ -16,6 +16,9 @@
           </span>
           <el-dropdown-menu slot="dropdown">
             <el-dropdown-item command="profile">Profile</el-dropdown-item>
+            <el-dropdown-item v-if="isAdmin" command="systemUsers">
+              System Users
+            </el-dropdown-item>
             <el-dropdown-item command="logout">Log out</el-dropdown-item>
           </el-dropdown-menu>
         </el-dropdown>
@@ -47,6 +50,7 @@
             User Profile
           </div>
           <div
+            v-if="isAdmin"
             class="tab_item"
             :class="{ active: activeTab === 'company' }"
             @click="activeTab = 'company'"
@@ -222,6 +226,8 @@
 </template>
 
 <script>
+import { isCompAdmin, persistSystemRole } from "../../utils/roles";
+
 export default {
   data() {
     return {
@@ -251,6 +257,11 @@ export default {
       },
     };
   },
+  computed: {
+    isAdmin() {
+      return isCompAdmin();
+    },
+  },
   created() {
     this.getUserInfo();
   },
@@ -272,6 +283,11 @@ export default {
         this.userName =
           info.name || info.username || info.displayName || info.account || "User";
         if (info.avatar_url) this.avatarSrc = info.avatar_url;
+        if (info.systemRole || info.system_role || info.permissionCode) {
+          persistSystemRole(
+            info.systemRole || info.system_role || info.permissionCode,
+          );
+        }
       } catch (e) {
         this.userName = "";
       }
@@ -279,6 +295,9 @@ export default {
     handleDropdownCommand(command) {
       if (command === "logout") this.handleLogout();
       if (command === "profile") this.handleProfile();
+      if (command === "systemUsers") {
+        this.$router.push({ name: "SystemUsers" });
+      }
     },
     handleLogout() {
       [
@@ -293,6 +312,7 @@ export default {
         "userInfo",
         "tags",
         "purchase_status",
+        "system_role",
       ].forEach((k) => sessionStorage.removeItem(k));
       this.$store.commit("UPDATE_TAGS", [
         {

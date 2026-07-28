@@ -61,6 +61,7 @@ const ICON_MAP = {
   GapAnalysis: "el-icon-data-analysis",
   PassingScores: "el-icon-trophy",
   ProjectSettings: "el-icon-user",
+  SystemUsers: "el-icon-s-custom",
   RcmFinal: "el-icon-warning-outline",
   OperationLog: "el-icon-time",
 };

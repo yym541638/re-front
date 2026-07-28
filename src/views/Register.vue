@@ -83,25 +83,34 @@
           </el-form-item>
 
           <div class="select_row">
-            <el-form-item label="Role Selection" required>
-              <el-select v-model="form.role" placeholder="Select role">
-                <el-option label="Clients" value="clients" />
-                <el-option label="Consultant" value="consultant" />
-                <el-option label="Auditor" value="auditor" />
+            <el-form-item label="Business Identity" required>
+              <el-select v-model="form.role" placeholder="Select identity">
+                <el-option
+                  v-for="item in businessIdentities"
+                  :key="item.code"
+                  :label="item.label"
+                  :value="item.code"
+                />
               </el-select>
             </el-form-item>
 
-            <el-form-item label="Permission" required>
-              <el-select v-model="form.permission" placeholder="Select permission">
+            <el-form-item label="System Role" required>
+              <el-select v-model="form.systemRole" placeholder="Select system role">
                 <el-option
-                  label="Administrator (Only 1 account)"
-                  value="administrator"
-                />
-                <el-option label="Document owner" value="documentOwner" />
-                <el-option label="General User" value="generalUser" />
-                <el-option label="Manager tier 1" value="managerTier1" />
-                <el-option label="Manager tier 2" value="managerTier2" />
+                  v-for="item in systemRoles"
+                  :key="item.code"
+                  :label="item.label"
+                  :value="item.code"
+                >
+                  <div class="role_option">
+                    <span class="role_option_title">{{ item.label }}</span>
+                    <span class="role_option_desc">{{ item.description }}</span>
+                  </div>
+                </el-option>
               </el-select>
+              <p class="role_hint" v-if="systemRoleHint">
+                {{ systemRoleHint }}
+              </p>
             </el-form-item>
           </div>
 
@@ -127,6 +136,7 @@
 
 <script>
 import CommonHeader from "../components/common/Header.vue";
+import { BUSINESS_IDENTITIES, SYSTEM_ROLES, systemRoleDescription } from "../utils/roles";
 
 export default {
   name: "Register",
@@ -136,6 +146,8 @@ export default {
   data() {
     return {
       loading: false,
+      businessIdentities: BUSINESS_IDENTITIES,
+      systemRoles: SYSTEM_ROLES,
       form: {
         firstName: "",
         lastName: "",
@@ -145,9 +157,20 @@ export default {
         invitationCode: "",
         companyName: "",
         role: "clients",
-        permission: "administrator",
+        systemRole: "COMP_ADMIN",
       },
     };
+  },
+  computed: {
+    systemRoleHint() {
+      return systemRoleDescription(this.form.systemRole);
+    },
+  },
+  watch: {
+    "form.invitationCode"(val) {
+      // 有公司邀请码 → 普通用户；新建公司 → 默认公司管理员
+      this.form.systemRole = val && String(val).trim() ? "COMP_USER" : "COMP_ADMIN";
+    },
   },
   methods: {
     goToLogin() {
@@ -174,6 +197,14 @@ export default {
         this.$message.warning("Please enter company name");
         return false;
       }
+      if (!this.form.role) {
+        this.$message.warning("Please select business identity");
+        return false;
+      }
+      if (!this.form.systemRole) {
+        this.$message.warning("Please select system role");
+        return false;
+      }
       return true;
     },
     async register() {
@@ -190,7 +221,12 @@ export default {
           invitationCode: this.form.invitationCode,
           companyName: this.form.companyName,
           roleCode: this.form.role,
-          permissionCode: this.form.permission,
+          systemRole: this.form.systemRole,
+          // 兼容旧后端字段
+          permissionCode:
+            this.form.systemRole === "COMP_ADMIN"
+              ? "administrator"
+              : "generalUser",
         };
         const res = await this.$api.register(payload);
         if (res.code == 0) {
@@ -328,6 +364,32 @@ export default {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.role_option {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  padding: 4px 0;
+}
+
+.role_option_title {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.role_option_desc {
+  font-size: 11px;
+  color: #64748b;
+  white-space: normal;
+}
+
+.role_hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 .register_btn {

@@ -18,11 +18,21 @@
           :tableTitles="tableTitles"
           :tableData="tableData"
           :selection="false"
-          operationW="100"
+          operationW="160"
           :isfixed="true"
         >
           <div slot="btn_edit" slot-scope="{ row }" class="cm-op-actions">
             <el-button
+              v-if="row.canManage"
+              type="text"
+              size="small"
+              class="cm-op-invite"
+              @click="openMembers(row)"
+            >
+              Members
+            </el-button>
+            <el-button
+              v-if="row.canManage"
               type="text"
               size="small"
               class="cm-op-invite"
@@ -35,7 +45,7 @@
       </div>
     </div>
 
-    <!-- Enter invitation code -->
+    <!-- Redeem invitation code -->
     <el-dialog
       title="Enter your code here"
       :visible.sync="inviteCodeVisible"
@@ -105,14 +115,59 @@
         >
           Confirm
         </el-button>
-        <el-button
-          v-else
-          type="primary"
-          @click="closeCreateInvite"
-        >
+        <el-button v-else type="primary" @click="closeCreateInvite">
           Done
         </el-button>
         <el-button class="btn-cancel-green" @click="closeCreateInvite">
+          Cancel
+        </el-button>
+      </div>
+    </el-dialog>
+
+    <!-- Edit project members -->
+    <el-dialog
+      title="Manage members"
+      :visible.sync="membersVisible"
+      width="560px"
+      :close-on-click-modal="false"
+      custom-class="invite-code-dialog"
+    >
+      <div class="members_body">
+        <div class="form_item">
+          <label>Project</label>
+          <el-input :value="membersTargetName" disabled />
+        </div>
+        <div
+          v-for="slot in memberSlots"
+          :key="slot.code"
+          class="form_item"
+        >
+          <label>{{ slot.label }}</label>
+          <el-select
+            v-model="slot.userId"
+            clearable
+            filterable
+            placeholder="Select user"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="user in companyUserOptions"
+              :key="user.userId"
+              :label="user.label"
+              :value="user.userId"
+            />
+          </el-select>
+        </div>
+      </div>
+      <div slot="footer" class="invite_footer">
+        <el-button
+          type="primary"
+          :loading="membersSaving"
+          @click="handleSaveMembers"
+        >
+          Save
+        </el-button>
+        <el-button class="btn-cancel-green" @click="membersVisible = false">
           Cancel
         </el-button>
       </div>
@@ -121,17 +176,13 @@
 </template>
 
 <script>
-const ROLE_COLUMNS = [
-  { fieldName: "Administrator", titleName: "Administrator", roleCode: "COMP_ADMIN", width: 130 },
-  { fieldName: "ProjectOwner", titleName: "Project Owner", roleCode: "PROJECT_OWNER", width: 130 },
-  { fieldName: "DocumentOwner", titleName: "Document Owner", roleCode: "DOCUMENT_OWNER", width: 140 },
-  { fieldName: "GeneralUser", titleName: "General User", roleCode: "GENERAL_USER", width: 120 },
-  { fieldName: "ManagerTier1", titleName: "Manager tier 1", roleCode: "MANAGER", width: 130 },
-  { fieldName: "ManagerTier2", titleName: "Manager tier 2", roleCode: "MANAGER_2", width: 130 },
-];
+import {
+  PROJECT_ROLES,
+  canManageProjectAccess,
+} from "../utils/roles";
 
-const ROLE_CODE_TO_FIELD = ROLE_COLUMNS.reduce((acc, col) => {
-  acc[col.roleCode] = col.fieldName;
+const ROLE_CODE_TO_FIELD = PROJECT_ROLES.reduce((acc, col) => {
+  acc[col.code] = col.fieldName;
   return acc;
 }, {});
 
@@ -141,9 +192,9 @@ export default {
     return {
       tableTitles: [
         { fieldName: "project_name", titleName: "Project name", width: 180 },
-        ...ROLE_COLUMNS.map(({ fieldName, titleName, width }) => ({
+        ...PROJECT_ROLES.map(({ fieldName, label, width }) => ({
           fieldName,
-          titleName,
+          titleName: label,
           width,
         })),
       ],
@@ -153,9 +204,9 @@ export default {
         pageSize: 20,
         total: 0,
       },
-      roleOptions: ROLE_COLUMNS.map((col) => ({
-        code: col.roleCode,
-        label: col.titleName,
+      roleOptions: PROJECT_ROLES.map((col) => ({
+        code: col.code,
+        label: col.label,
       })),
       inviteCodeVisible: false,
       inviteCode: "",
@@ -165,6 +216,12 @@ export default {
       inviteRole: "",
       generatedCode: "",
       inviteCreating: false,
+      membersVisible: false,
+      membersTargetId: null,
+      membersTargetName: "",
+      memberSlots: [],
+      companyUserOptions: [],
+      membersSaving: false,
     };
   },
   created() {
@@ -173,7 +230,7 @@ export default {
   methods: {
     mapRoleSlots(roleSlots) {
       const mapped = {};
-      ROLE_COLUMNS.forEach((col) => {
+      PROJECT_ROLES.forEach((col) => {
         mapped[col.fieldName] = "";
       });
       (roleSlots || []).forEach((slot) => {
@@ -198,11 +255,16 @@ export default {
         if (res.code == 0) {
           const pageData = res.data || {};
           const list = pageData.list || [];
-          this.tableData = list.map((item) => ({
-            project_id: item.project_id || item.projectId,
-            project_name: item.project_name || item.projectName || "",
-            ...this.mapRoleSlots(item.role_slots || item.roleSlots),
-          }));
+          this.tableData = list.map((item) => {
+            const roleSlots = item.role_slots || item.roleSlots || [];
+            return {
+              project_id: item.project_id || item.projectId,
+              project_name: item.project_name || item.projectName || "",
+              canManage: canManageProjectAccess(roleSlots),
+              roleSlots,
+              ...this.mapRoleSlots(roleSlots),
+            };
+          });
           this.tablePage.total =
             pageData.totalCount || pageData.total || res.total || 0;
         } else {
@@ -303,6 +365,85 @@ export default {
         this.$message.error("Copy failed");
       }
     },
+    async loadCompanyUsers() {
+      try {
+        const res = await this.$api.companyUsers({});
+        if (res.code == 0) {
+          const data = res.data;
+          const rows = Array.isArray(data)
+            ? data
+            : (data && (data.list || data.records)) || [];
+          this.companyUserOptions = rows.map((u) => {
+            const userId = u.user_id || u.userId || u.id;
+            const name =
+              u.display_name ||
+              u.displayName ||
+              u.username ||
+              u.name ||
+              u.email ||
+              String(userId);
+            return {
+              userId: Number(userId),
+              label: u.email ? `${name} (${u.email})` : name,
+              displayName: name,
+            };
+          });
+        }
+      } catch (e) {
+        this.companyUserOptions = [];
+      }
+    },
+    async openMembers(row) {
+      this.membersTargetId = row.project_id;
+      this.membersTargetName = row.project_name || "";
+      const slots = row.roleSlots || [];
+      this.memberSlots = PROJECT_ROLES.map((role) => {
+        const hit = slots.find(
+          (s) => (s.role_code || s.roleCode) === role.code,
+        );
+        return {
+          code: role.code,
+          label: role.label,
+          userId: hit
+            ? Number(hit.user_id || hit.userId || "") || null
+            : null,
+        };
+      });
+      await this.loadCompanyUsers();
+      this.membersVisible = true;
+    },
+    async handleSaveMembers() {
+      if (!this.membersTargetId) return;
+      this.membersSaving = true;
+      try {
+        const members = this.memberSlots
+          .filter((s) => s.userId)
+          .map((s) => {
+            const user = this.companyUserOptions.find(
+              (u) => u.userId === s.userId,
+            );
+            return {
+              userId: s.userId,
+              memberRole: s.code,
+              displayName: user ? user.displayName : "",
+            };
+          });
+        const res = await this.$api.projectSaveMembers(this.membersTargetId, {
+          members,
+        });
+        if (res.code == 0) {
+          this.$message.success("Members updated");
+          this.membersVisible = false;
+          this.VoPageListByDto(this.tablePage.pageIndex);
+        } else {
+          this.$message.error(res.message || "Save members failed");
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || "Save members failed");
+      } finally {
+        this.membersSaving = false;
+      }
+    },
   },
 };
 </script>
@@ -324,6 +465,12 @@ export default {
   color: #fff !important;
 }
 
+.cm-op-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .cm-op-invite.el-button--text {
   color: #2563eb !important;
   font-size: 13px;
@@ -332,7 +479,8 @@ export default {
   margin: 0 !important;
 }
 
-.invite_create_body {
+.invite_create_body,
+.members_body {
   .form_item {
     margin-bottom: 16px;
 

