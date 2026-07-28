@@ -365,32 +365,65 @@ export default {
         this.$message.error("Copy failed");
       }
     },
-    async loadCompanyUsers() {
+    normalizeUserOption(u) {
+      const userId = u.user_id || u.userId || u.id;
+      const name =
+        u.display_name ||
+        u.displayName ||
+        u.username ||
+        u.name ||
+        u.email ||
+        String(userId);
+      return {
+        userId: Number(userId),
+        label: u.email ? `${name} (${u.email})` : name,
+        displayName: name,
+      };
+    },
+    readCompanyName() {
       try {
-        const res = await this.$api.companyUsers({});
-        if (res.code == 0) {
+        const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
+        return (
+          info.company_name ||
+          info.companyName ||
+          sessionStorage.getItem("companyName") ||
+          ""
+        );
+      } catch (e) {
+        return sessionStorage.getItem("companyName") || "";
+      }
+    },
+    async loadCompanyUsers() {
+      const mapRows = (rows) =>
+        (rows || [])
+          .map((u) => this.normalizeUserOption(u))
+          .filter((u) => u.userId);
+
+      const companyName = this.readCompanyName();
+      try {
+        // 必须拉「当前公司」用户，否则保存会报：项目成员必须属于当前公司
+        const res = await this.$api.companyUsers(
+          companyName ? { companyName } : {},
+        );
+        let options = [];
+        if (res && Number(res.code) === 0) {
           const data = res.data;
           const rows = Array.isArray(data)
             ? data
             : (data && (data.list || data.records)) || [];
-          this.companyUserOptions = rows.map((u) => {
-            const userId = u.user_id || u.userId || u.id;
-            const name =
-              u.display_name ||
-              u.displayName ||
-              u.username ||
-              u.name ||
-              u.email ||
-              String(userId);
-            return {
-              userId: Number(userId),
-              label: u.email ? `${name} (${u.email})` : name,
-              displayName: name,
-            };
-          });
+          options = mapRows(rows);
+        }
+        this.companyUserOptions = options;
+        if (!options.length) {
+          this.$message.warning(
+            companyName
+              ? "当前公司暂无可选用户，请先通过邀请码加入公司成员"
+              : "未找到公司信息，无法加载成员列表",
+          );
         }
       } catch (e) {
         this.companyUserOptions = [];
+        this.$message.error((e && e.message) || "Load company users failed");
       }
     },
     async openMembers(row) {
@@ -410,6 +443,15 @@ export default {
         };
       });
       await this.loadCompanyUsers();
+      // 清掉不在本公司用户列表中的已选值，避免保存时报错
+      const validIds = new Set(
+        this.companyUserOptions.map((u) => u.userId),
+      );
+      this.memberSlots.forEach((slot) => {
+        if (slot.userId && !validIds.has(slot.userId)) {
+          slot.userId = null;
+        }
+      });
       this.membersVisible = true;
     },
     async handleSaveMembers() {

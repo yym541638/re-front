@@ -148,31 +148,6 @@
           <el-input :value="formData.creationDateDisplay" disabled />
         </div>
 
-        <div class="form_item">
-          <label>Document Owner Name</label>
-          <el-select
-            v-model="formData.documentOwnerUserIds"
-            multiple
-            filterable
-            remote
-            clearable
-            reserve-keyword
-            placeholder="Search document owner"
-            style="width: 100%"
-            :remote-method="searchOwners"
-            :loading="ownersLoading"
-            :disabled="formReadonly"
-            @change="onOwnersChange"
-          >
-            <el-option
-              v-for="u in ownerOptions"
-              :key="u.user_id"
-              :label="u.display_name || u.email"
-              :value="u.user_id"
-            />
-          </el-select>
-        </div>
-
         <div class="form_item" v-if="formMode !== 'create'">
           <label>Upload evidence</label>
           <div class="evidence_table">
@@ -239,17 +214,20 @@
         </div>
 
         <div class="form_item" v-if="formMode !== 'create'">
-          <label>Request Evidence Review AI</label>
-          <div class="ai_status" :class="aiStatusClass">
-            {{ aiStatusText }}
-          </div>
-          <el-input
-            class="ai_comment"
-            type="textarea"
-            :rows="3"
-            :value="formData.aiCommentContent || '-'"
-            disabled
-          />
+          <label>request send</label>
+          <el-button
+            class="cm-btn-secondary"
+            :loading="sending"
+            :disabled="formReadonly || !formData.requestId"
+            @click="handleSendRequestClick"
+          >
+            send request
+          </el-button>
+        </div>
+
+        <div class="form_item" v-if="formMode !== 'create'">
+          <label>send request Date</label>
+          <el-input :value="formData.sendDateDisplay || '-'" disabled />
         </div>
       </div>
 
@@ -260,7 +238,7 @@
           :loading="sending"
           @click="handleSend({ requestId: formData.requestId })"
         >
-          Send
+          Create
         </el-button>
         <el-button
           v-if="!formReadonly"
@@ -320,11 +298,8 @@ const emptyForm = () => ({
   requestDescription: "",
   creationDate: "",
   creationDateDisplay: "-",
-  documentOwnerName: "",
-  documentOwnerUserIds: [],
   commentContent: "",
-  aiStatus: "",
-  aiCommentContent: "",
+  sendDateDisplay: "-",
   evidences: [],
 });
 
@@ -378,8 +353,6 @@ export default {
       versions: [],
       selectedVersionId: null,
       currentVersionLabel: "",
-      ownerOptions: [],
-      ownersLoading: false,
       loading: false,
       generating: false,
       sending: false,
@@ -396,33 +369,12 @@ export default {
         ""
       );
     },
-    projectId() {
-      return (
-        this.$route.query.projectId ||
-        sessionStorage.getItem("currentProjectId") ||
-        ""
-      );
-    },
     pagedData() {
       const start = (this.tablePage.pageIndex - 1) * this.tablePage.pageSize;
       return this.tableData.slice(start, start + this.tablePage.pageSize);
     },
     formReadonly() {
       return this.formMode === "view";
-    },
-    aiStatusClass() {
-      const s = String(this.formData.aiStatus || "").toUpperCase();
-      if (s.includes("GREEN") || s.includes("GOOD") || s === "PASS") return "is-green";
-      if (s.includes("YELLOW") || s.includes("ATTENTION") || s === "WARN") return "is-yellow";
-      if (s.includes("RED") || s.includes("FAIL") || s.includes("NOT")) return "is-red";
-      return "is-muted";
-    },
-    aiStatusText() {
-      const s = String(this.formData.aiStatus || "").toUpperCase();
-      if (this.aiStatusClass === "is-green") return "all good";
-      if (this.aiStatusClass === "is-yellow") return "need attention";
-      if (this.aiStatusClass === "is-red") return "not right";
-      return s || "Pending";
     },
   },
   watch: {
@@ -495,7 +447,6 @@ export default {
       }
       await this.loadVersions();
       await this.loadList({ tryGenerateIfEmpty: true });
-      this.searchOwners("");
     },
     async loadList(options = {}) {
       // GET /api/request/individual/list?requestMasterId=
@@ -579,7 +530,6 @@ export default {
           return;
         }
         const d = res.data || {};
-        const ownerId = d.document_owner_user_id || d.documentOwnerUserId;
         this.formData = {
           requestId: d.request_id || row.requestId,
           requestName: d.request_name || "",
@@ -588,65 +538,16 @@ export default {
           requestDescription: d.request_description || "",
           creationDate: d.request_creation_date || "",
           creationDateDisplay: this.formatDateTime(d.request_creation_date),
-          documentOwnerName: d.document_owner_name || "",
-          documentOwnerUserIds: ownerId ? [ownerId] : [],
           commentContent: d.comment_content || "",
-          aiStatus:
-            d.request_evidence_review_ai_status ||
-            d.request_individual_review_status ||
-            "",
-          aiCommentContent:
-            d.ai_comment_content ||
-            d.request_individual_review_comment ||
-            "",
+          sendDateDisplay: this.formatDateTime(
+            d.request_send_date || d.requestSendDate,
+          ),
           evidences: d.evidences || [],
         };
-        if (ownerId && d.document_owner_name) {
-          const exists = this.ownerOptions.some((u) => u.user_id === ownerId);
-          if (!exists) {
-            this.ownerOptions = [
-              {
-                user_id: ownerId,
-                display_name: d.document_owner_name,
-              },
-              ...this.ownerOptions,
-            ];
-          }
-        }
         this.drawerVisible = true;
       } catch (e) {
         this.$message.error((e && e.message) || "Load detail failed");
       }
-    },
-    async searchOwners(keyword) {
-      // GET /api/request/individual/document-owners?projectId=
-      if (!this.projectId) {
-        this.ownerOptions = [];
-        return;
-      }
-      this.ownersLoading = true;
-      try {
-        const res = await this.$api.requestIndividualDocumentOwners({
-          projectId: this.projectId,
-          keyword: keyword || "",
-        });
-        if (res && Number(res.code) === 0) {
-          this.ownerOptions = Array.isArray(res.data) ? res.data : [];
-        }
-      } catch (e) {
-        /* ignore */
-      } finally {
-        this.ownersLoading = false;
-      }
-    },
-    onOwnersChange(ids) {
-      const names = (ids || [])
-        .map((id) => {
-          const hit = this.ownerOptions.find((u) => u.user_id === id);
-          return hit ? hit.display_name || hit.email : "";
-        })
-        .filter(Boolean);
-      this.formData.documentOwnerName = names.join(", ");
     },
     async handleSave() {
       if (!this.formData.requestName) {
@@ -658,8 +559,7 @@ export default {
         return;
       }
       this.saving = true;
-      const ownerIds = this.formData.documentOwnerUserIds || [];
-      // POST /api/request/individual  |  PUT /api/request/individual/{requestId}
+      // Document Owner 由 Access management 项目角色继承，不再按条指定
       const payload = {
         requestMasterId: Number(this.requestMasterId),
         request_master_id: Number(this.requestMasterId),
@@ -667,8 +567,6 @@ export default {
         ccCriteria: this.formData.ccCriteria || "",
         pointsOfFocus: this.formData.pointsOfFocus || "",
         requestDescription: this.formData.requestDescription || "",
-        documentOwnerName: this.formData.documentOwnerName || "",
-        documentOwnerUserId: ownerIds[0] || null,
         commentContent: this.formData.commentContent || "",
       };
       try {
@@ -694,6 +592,11 @@ export default {
         this.saving = false;
       }
     },
+    async handleSendRequestClick() {
+      // 根据点击时间自动更新 send request Date
+      this.formData.sendDateDisplay = nowDateTime();
+      await this.handleSend({ requestId: this.formData.requestId });
+    },
     async handleSend(row) {
       const requestId = row && (row.requestId || row.request_id);
       if (!requestId) {
@@ -706,6 +609,9 @@ export default {
         const res = await this.$api.requestIndividualSend(requestId);
         if (res && Number(res.code) === 0) {
           this.$message.success("Sent successfully");
+          if (this.drawerVisible && this.formData.requestId == requestId) {
+            this.formData.sendDateDisplay = nowDateTime();
+          }
           this.loadList({ tryGenerateIfEmpty: false });
           if (this.drawerVisible && this.formData.requestId == requestId) {
             this.openForm(this.formMode, { requestId });
@@ -956,40 +862,6 @@ export default {
 
 .evidence_upload {
   padding: 8px;
-}
-
-.ai_status {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 8px;
-
-  &.is-green {
-    background: rgba(15, 118, 110, 0.12);
-    color: #0f766e;
-  }
-
-  &.is-yellow {
-    background: rgba(245, 158, 11, 0.15);
-    color: #b45309;
-  }
-
-  &.is-red {
-    background: rgba(220, 38, 38, 0.12);
-    color: #dc2626;
-  }
-
-  &.is-muted {
-    background: #f1f5f9;
-    color: #64748b;
-  }
-}
-
-.ai_comment {
-  width: 100%;
 }
 
 .cm-empty-tip {
