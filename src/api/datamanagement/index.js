@@ -150,6 +150,10 @@ export const controlTestingSaveVersion = (testId, params) =>
 /* ===================== Gap Analysis ===================== */
 export const gapAnalysisList = (params) =>
   http("get", `/gap-analysis/list`, params);
+export const gapAnalysisCreate = (params) =>
+  http("post", `/gap-analysis?projectId=${params.projectId}`, params);
+export const gapAnalysisUpdate = (gapId, params) =>
+  http("put", `/gap-analysis/${gapId}`, params);
 export const gapAnalysisRegenerate = (params) =>
   http("post", `/gap-analysis/regenerate`, params);
 

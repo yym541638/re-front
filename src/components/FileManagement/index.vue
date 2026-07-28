@@ -1,77 +1,51 @@
 <template>
-  <!-- //File Management -->
   <el-dialog
     :title="title"
     :visible="visible"
     @close="handleClose"
-    width="800px"
+    width="720px"
+    :close-on-click-modal="false"
+    custom-class="file-mgmt-dialog"
   >
-    <!-- <div style="margin-bottom: 20px;">
-      <el-button type="primary" style="background-color: #3498db; border-color: #3498db;">New</el-button>
-    </div> -->
-    <el-table :data="fileData" style="width: 100%">
-      <el-table-column prop="fileNo" label="File No" width="100">
-      </el-table-column>
-      <el-table-column prop="files" label="Files"> </el-table-column>
-      <el-table-column prop="operations" label="Operations" width="200">
+    <el-table :data="pagedFiles" style="width: 100%" border>
+      <el-table-column prop="fileNo" label="File No" width="90" />
+      <el-table-column prop="file" label="File" min-width="200" />
+      <el-table-column prop="relevantWork" label="Relevant work" min-width="160" />
+      <el-table-column label="Operations" width="120">
         <template slot-scope="scope">
-          <div
-            v-if="scope.row.operations === 'view_delete'"
-            style="display: flex; gap: 8px"
+          <el-button
+            type="text"
+            size="small"
+            class="op-delete"
+            @click="handleDelete(scope.row)"
           >
-            <el-button
-              type="text"
-              size="small"
-              @click="handleView(scope.row)"
-              style="color: #3498db"
-              >View</el-button
-            >
-            <el-button
-              type="text"
-              size="small"
-              @click="handleDelete(scope.row)"
-              style="color: #e74c3c"
-              >Delete</el-button
-            >
-          </div>
-          <div v-else>
-            <el-upload
-              class="upload-btn"
-              action="#"
-              :auto-upload="false"
-              :on-change="(file) => handleUpload(file, scope.row)"
-              accept=".pdf,.xlsx,.xls,.docx,.doc"
-              :limit="1"
-            >
-              <el-button type="text" size="small" style="color: #3498db"
-                >Upload</el-button
-              >
-            </el-upload>
-          </div>
+            delete
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
-    <div style="margin-top: 20px; display: flex; justify-content: flex-end">
+
+    <div class="file_pager">
       <el-pagination
         background
-        @current-change="handleFileCurrentChange"
-        @size-change="handleFileSizeChange"
+        layout="prev, pager, next"
         :current-page="filePage.pageIndex"
-        :page-sizes="[5, 10, 20]"
         :page-size="filePage.pageSize"
-        layout="prev, pager, next, sizes"
         :total="filePage.total"
-      >
-      </el-pagination>
+        @current-change="handleFileCurrentChange"
+      />
+      <span class="page_hint">
+        Page {{ filePage.pageIndex }} of {{ totalPages }}
+      </span>
     </div>
 
     <span slot="footer" class="dialog-footer">
-      <el-button
-        type="primary"
-        style="background-color: #3498db; border-color: #3498db"
-        >Create</el-button
-      >
-      <el-button @click="editDialogVisible = false">Cancel</el-button>
+      <el-button type="primary" class="btn-confirm" @click="handleConfirm">
+        Confirm
+      </el-button>
+      <el-button class="btn-cancel-green" @click="handleClose">
+        Cancel
+      </el-button>
     </span>
   </el-dialog>
 </template>
@@ -84,84 +58,100 @@ export default {
       type: Boolean,
       default: false,
     },
-
     title: {
       type: String,
-      default: () => {
-        return "File Management";
-      },
+      default: "File management",
     },
   },
   data() {
     return {
       fileData: [
-        { fileNo: 1, files: "Word/Excel/Pdf Only", operations: "view_delete" },
-        { fileNo: 2, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 3, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 4, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 5, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 6, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 7, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 8, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 9, files: "Word/Excel/Pdf Only", operations: "upload" },
-        { fileNo: 10, files: "Word/Excel/Pdf Only", operations: "upload" },
+        {
+          fileNo: 1,
+          file: "evidence-access-review.pdf",
+          relevantWork: "Access review",
+        },
+        {
+          fileNo: 2,
+          file: "policy-security.docx",
+          relevantWork: "Policy update",
+        },
+        {
+          fileNo: 3,
+          file: "control-matrix.xlsx",
+          relevantWork: "Control mapping",
+        },
+        {
+          fileNo: 4,
+          file: "audit-trail.pdf",
+          relevantWork: "Audit support",
+        },
+        {
+          fileNo: 5,
+          file: "training-record.docx",
+          relevantWork: "Awareness",
+        },
+        {
+          fileNo: 6,
+          file: "risk-register.xlsx",
+          relevantWork: "Risk assessment",
+        },
       ],
       filePage: {
         pageIndex: 1,
-        pageSize: 5,
-        total: 10,
+        pageSize: 3,
+        total: 6,
       },
     };
   },
+  computed: {
+    totalPages() {
+      return Math.max(
+        1,
+        Math.ceil(this.filePage.total / this.filePage.pageSize) || 1,
+      );
+    },
+    pagedFiles() {
+      const start =
+        (this.filePage.pageIndex - 1) * this.filePage.pageSize;
+      return this.fileData.slice(start, start + this.filePage.pageSize);
+    },
+  },
+  watch: {
+    visible(val) {
+      if (val) {
+        this.filePage.pageIndex = 1;
+        this.filePage.total = this.fileData.length;
+      }
+    },
+  },
   methods: {
-    // 文件管理分页 - 页码变化
     handleFileCurrentChange(page) {
       this.filePage.pageIndex = page;
-      // 这里可以添加重新获取数据的逻辑
     },
-    // 文件管理分页 - 每页条数变化
-    handleFileSizeChange(size) {
-      this.filePage.pageSize = size;
-      this.filePage.pageIndex = 1;
-      // 这里可以添加重新获取数据的逻辑
-    },
-    // 查看文件
-    handleView(row) {
-      console.log("View file:", row);
-      // 这里可以添加查看文件的逻辑
-    },
-    // 处理删除
     handleDelete(row) {
-      this.$confirm("是否确认删除?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
+      this.$confirm("Confirm delete this file?", "Tip", {
+        confirmButtonText: "OK",
+        cancelButtonText: "Cancel",
         type: "warning",
       })
         .then(() => {
-          console.log("Delete file:", row);
-          // 这里可以添加删除文件的逻辑
-          this.$message.success("删除成功");
+          this.fileData = this.fileData.filter(
+            (item) => item.fileNo !== row.fileNo,
+          );
+          this.filePage.total = this.fileData.length;
+          const maxPage = this.totalPages;
+          if (this.filePage.pageIndex > maxPage) {
+            this.filePage.pageIndex = maxPage;
+          }
+          this.$message.success("Deleted successfully");
         })
-        .catch(() => {
-          // 取消删除
-        });
+        .catch(() => {});
     },
-    // 处理上传
-    handleUpload(file, row) {
-      // 检查文件类型
-      const fileTypes = [".pdf", ".xlsx", ".xls", ".docx", ".doc"];
-      const fileExtension = file.name.substring(file.name.lastIndexOf("."));
-
-      if (!fileTypes.includes(fileExtension.toLowerCase())) {
-        this.$message.error("Only PDF, Excel, and Word files are allowed");
-        return;
-      }
-
-      console.log("Upload file:", file, "for row:", row);
-      // 这里可以添加文件上传的逻辑
-      this.$message.success("File uploaded successfully");
+    handleConfirm() {
+      this.$emit("confirm", this.fileData);
+      this.handleClose();
     },
-    // 处理弹框关闭
     handleClose() {
       this.$emit("update:visible", false);
     },
@@ -169,4 +159,38 @@ export default {
 };
 </script>
 
-<style scoped></style>
+<style scoped>
+.file_pager {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page_hint {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.op-delete {
+  color: #dc2626 !important;
+  font-weight: 600;
+}
+
+.btn-confirm {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.btn-cancel-green {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+</style>
+
+<style>
+.file-mgmt-dialog .el-dialog__title {
+  font-weight: 700;
+}
+</style>

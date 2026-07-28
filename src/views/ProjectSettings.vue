@@ -1,9 +1,17 @@
 <template>
   <div class="cm-page">
     <div class="cm-page__body">
+      <div class="cm-toolbar">
+        <div class="cm-toolbar__left">
+          <el-button class="cm-btn-invite" @click="inviteCodeVisible = true">
+            Invitation code
+          </el-button>
+        </div>
+      </div>
+
       <div class="cm-table-panel">
         <Vxetable
-          ref="invoiceVxeTable"
+          ref="accessTable"
           @currentChange="VoPageListByDto"
           @sizeChange="sizeChange"
           :tablePage="tablePage"
@@ -11,168 +19,351 @@
           :tableData="tableData"
           :selection="false"
           operationW="100"
+          :isfixed="true"
         >
           <div slot="btn_edit" slot-scope="{ row }" class="cm-op-actions">
             <el-button
               type="text"
               size="small"
-              class="cm-op-link"
-              @click="Edit(row)"
+              class="cm-op-invite"
+              @click="openInvite(row)"
             >
-              Edit
+              Invite
             </el-button>
           </div>
         </Vxetable>
       </div>
-
-      <el-dialog
-        title="Project Settings"
-        :visible.sync="editDialogVisible"
-        width="600px"
-        custom-class="cm-dialog"
-      >
-        <div class="cm-dialog__body" v-if="currentRow">
-          <div class="cm-dialog__field">
-            <label class="cm-label">Project name</label>
-            <el-input v-model="currentRow.ProjectName" />
-          </div>
-
-          <div class="cm-dialog__section">
-            <label class="cm-label">Project user management</label>
-            <el-table :data="userData" style="width: 100%; margin-top: 12px" border>
-              <el-table-column prop="role" label="Role" width="150" />
-              <el-table-column prop="name" label="Name">
-                <template slot-scope="scope">
-                  <el-input
-                    v-if="scope.row.editing"
-                    v-model="scope.row.name"
-                    size="small"
-                  />
-                  <span v-else>{{ scope.row.name || "--" }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="operation" label="Operation" width="100">
-                <template slot-scope="scope">
-                  <el-button
-                    type="text"
-                    size="small"
-                    class="cm-op-link"
-                    @click="toggleEdit(scope.row)"
-                  >
-                    {{ scope.row.editing ? "Save" : "Edit" }}
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </div>
-
-        <span slot="footer" class="cm-dialog__footer">
-          <el-button class="cm-btn-primary">Create</el-button>
-          <el-button class="cm-btn-secondary" @click="editDialogVisible = false">
-            Cancel
-          </el-button>
-        </span>
-      </el-dialog>
     </div>
+
+    <!-- Enter invitation code -->
+    <el-dialog
+      title="Enter your code here"
+      :visible.sync="inviteCodeVisible"
+      width="420px"
+      :close-on-click-modal="false"
+      custom-class="invite-code-dialog"
+    >
+      <el-input
+        v-model="inviteCode"
+        type="textarea"
+        :rows="5"
+        placeholder="Enter your invitation code"
+      />
+      <div slot="footer" class="invite_footer">
+        <el-button type="primary" @click="handleRedeemConfirm">Confirm</el-button>
+        <el-button class="btn-cancel-green" @click="inviteCodeVisible = false">
+          Cancel
+        </el-button>
+      </div>
+    </el-dialog>
+
+    <!-- Create project invitation -->
+    <el-dialog
+      title="Invite member"
+      :visible.sync="createInviteVisible"
+      width="420px"
+      :close-on-click-modal="false"
+      custom-class="invite-code-dialog"
+    >
+      <div class="invite_create_body">
+        <div class="form_item">
+          <label>Project</label>
+          <el-input :value="inviteTargetName" disabled />
+        </div>
+        <div class="form_item">
+          <label>Role<span class="required">*</span></label>
+          <el-select
+            v-model="inviteRole"
+            placeholder="Select role"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="role in roleOptions"
+              :key="role.code"
+              :label="role.label"
+              :value="role.code"
+            />
+          </el-select>
+        </div>
+        <div class="form_item" v-if="generatedCode">
+          <label>Invitation code</label>
+          <el-input :value="generatedCode" readonly>
+            <el-button
+              slot="append"
+              icon="el-icon-document-copy"
+              @click="copyCode"
+            />
+          </el-input>
+        </div>
+      </div>
+      <div slot="footer" class="invite_footer">
+        <el-button
+          v-if="!generatedCode"
+          type="primary"
+          :loading="inviteCreating"
+          @click="handleCreateInvite"
+        >
+          Confirm
+        </el-button>
+        <el-button
+          v-else
+          type="primary"
+          @click="closeCreateInvite"
+        >
+          Done
+        </el-button>
+        <el-button class="btn-cancel-green" @click="closeCreateInvite">
+          Cancel
+        </el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+const ROLE_COLUMNS = [
+  { fieldName: "Administrator", titleName: "Administrator", roleCode: "COMP_ADMIN", width: 130 },
+  { fieldName: "ProjectOwner", titleName: "Project Owner", roleCode: "PROJECT_OWNER", width: 130 },
+  { fieldName: "DocumentOwner", titleName: "Document Owner", roleCode: "DOCUMENT_OWNER", width: 140 },
+  { fieldName: "GeneralUser", titleName: "General User", roleCode: "GENERAL_USER", width: 120 },
+  { fieldName: "ManagerTier1", titleName: "Manager tier 1", roleCode: "MANAGER", width: 130 },
+  { fieldName: "ManagerTier2", titleName: "Manager tier 2", roleCode: "MANAGER_2", width: 130 },
+];
+
+const ROLE_CODE_TO_FIELD = ROLE_COLUMNS.reduce((acc, col) => {
+  acc[col.roleCode] = col.fieldName;
+  return acc;
+}, {});
+
 export default {
   name: "ProjectSettings",
   data() {
     return {
       tableTitles: [
-        { fieldName: "ProjectName", titleName: "Project Name" },
-        { fieldName: "Type", titleName: "Type" },
-        { fieldName: "Version", titleName: "Version" },
-        { fieldName: "GapsNumber", titleName: "Gaps" },
-        { fieldName: "LastModifiedDate", titleName: "Last Modified" },
-        { fieldName: "Status", titleName: "Status" },
-        { fieldName: "StartDate", titleName: "Start Date" },
-        { fieldName: "EndDate", titleName: "End Date" },
+        { fieldName: "project_name", titleName: "Project name", width: 180 },
+        ...ROLE_COLUMNS.map(({ fieldName, titleName, width }) => ({
+          fieldName,
+          titleName,
+          width,
+        })),
       ],
-      tableData: [
-        {
-          ProjectName: "Compliance Audit",
-          Type: "Type 1",
-          Version: "12/15/2025",
-          GapsNumber: "--",
-          LastModifiedDate: "1/1/2026",
-          Status: "Active/ End",
-          StartDate: "12/15/2025",
-          EndDate: "N/A",
-        },
-        {
-          ProjectName: "company Name1",
-          Type: "Type 1",
-          Version: "12/15/2025",
-          GapsNumber: "--",
-          LastModifiedDate: "1/1/2026",
-          Status: "Active/ End",
-          StartDate: "12/15/2025",
-          EndDate: "N/A",
-        },
-      ],
+      tableData: [],
       tablePage: {
         pageIndex: 1,
         pageSize: 20,
         total: 0,
       },
-      editDialogVisible: false,
-      currentRow: null,
-      userData: [
-        { role: "Administrator", name: "", operation: "edit", editing: false },
-        { role: "Project Owner", name: "", operation: "edit", editing: false },
-        { role: "Document Owner", name: "", operation: "edit", editing: false },
-        { role: "General User", name: "", operation: "edit", editing: false },
-        { role: "Test User", name: "", operation: "edit", editing: false },
-        { role: "Auditor", name: "", operation: "edit", editing: false },
-        { role: "Manager User 1", name: "", operation: "edit", editing: false },
-      ],
+      roleOptions: ROLE_COLUMNS.map((col) => ({
+        code: col.roleCode,
+        label: col.titleName,
+      })),
+      inviteCodeVisible: false,
+      inviteCode: "",
+      createInviteVisible: false,
+      inviteTargetId: null,
+      inviteTargetName: "",
+      inviteRole: "",
+      generatedCode: "",
+      inviteCreating: false,
     };
   },
+  created() {
+    this.VoPageListByDto(1);
+  },
   methods: {
-    async VoPageListByDto(page) {},
+    mapRoleSlots(roleSlots) {
+      const mapped = {};
+      ROLE_COLUMNS.forEach((col) => {
+        mapped[col.fieldName] = "";
+      });
+      (roleSlots || []).forEach((slot) => {
+        const code = slot.role_code || slot.roleCode || "";
+        const field = ROLE_CODE_TO_FIELD[code];
+        if (!field) return;
+        mapped[field] =
+          slot.display_name ||
+          slot.displayName ||
+          slot.email ||
+          "";
+      });
+      return mapped;
+    },
+    async VoPageListByDto(page) {
+      this.tablePage.pageIndex = page;
+      try {
+        const res = await this.$api.projectAccessManagement({
+          pageSize: this.tablePage.pageSize,
+          pageNum: this.tablePage.pageIndex,
+        });
+        if (res.code == 0) {
+          const pageData = res.data || {};
+          const list = pageData.list || [];
+          this.tableData = list.map((item) => ({
+            project_id: item.project_id || item.projectId,
+            project_name: item.project_name || item.projectName || "",
+            ...this.mapRoleSlots(item.role_slots || item.roleSlots),
+          }));
+          this.tablePage.total =
+            pageData.totalCount || pageData.total || res.total || 0;
+        } else {
+          this.$message.warning(res.message || "Load access list failed");
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || "Load access list failed");
+      }
+    },
     sizeChange(size) {
       this.tablePage.pageSize = size;
       this.VoPageListByDto(1);
     },
-    Edit(row) {
-      this.currentRow = row;
-      this.editDialogVisible = true;
+    async handleRedeemConfirm() {
+      if (!this.inviteCode.trim()) {
+        this.$message.warning("Please enter invitation code");
+        return;
+      }
+      try {
+        const res = await this.$api.invitationCodeRedeem({
+          code: this.inviteCode.trim(),
+        });
+        if (res.code == 0) {
+          const data = res.data || {};
+          this.$message.success(
+            data.message || "Invitation code redeemed successfully",
+          );
+          this.inviteCodeVisible = false;
+          this.inviteCode = "";
+          this.VoPageListByDto(this.tablePage.pageIndex);
+        } else {
+          this.$message.error(res.message || "Redeem failed");
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || "Redeem failed");
+      }
     },
-    toggleEdit(row) {
-      row.editing = !row.editing;
+    openInvite(row) {
+      this.inviteTargetId = row.project_id;
+      this.inviteTargetName = row.project_name || "";
+      this.inviteRole = "";
+      this.generatedCode = "";
+      this.createInviteVisible = true;
+    },
+    closeCreateInvite() {
+      this.createInviteVisible = false;
+      this.inviteTargetId = null;
+      this.inviteTargetName = "";
+      this.inviteRole = "";
+      this.generatedCode = "";
+    },
+    async handleCreateInvite() {
+      if (!this.inviteTargetId) {
+        this.$message.warning("Project is required");
+        return;
+      }
+      if (!this.inviteRole) {
+        this.$message.warning("Please select a role");
+        return;
+      }
+      this.inviteCreating = true;
+      try {
+        const res = await this.$api.invitationCodeCreate({
+          projectId: this.inviteTargetId,
+          memberRole: this.inviteRole,
+        });
+        if (res.code == 0) {
+          const data = res.data || {};
+          this.generatedCode = data.code || "";
+          this.$message.success("Invitation code created");
+          if (!this.generatedCode) {
+            this.closeCreateInvite();
+          }
+        } else {
+          this.$message.error(res.message || "Create invitation failed");
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || "Create invitation failed");
+      } finally {
+        this.inviteCreating = false;
+      }
+    },
+    async copyCode() {
+      if (!this.generatedCode) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(this.generatedCode);
+        } else {
+          const input = document.createElement("textarea");
+          input.value = this.generatedCode;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand("copy");
+          document.body.removeChild(input);
+        }
+        this.$message.success("Copied");
+      } catch (e) {
+        this.$message.error("Copy failed");
+      }
     },
   },
 };
 </script>
 
 <style lang="less" scoped>
-.cm-dialog__body {
-  padding: 4px 0;
+.cm-btn-invite {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+  min-width: 130px;
+  border-radius: 4px;
+  font-weight: 600;
 }
 
-.cm-dialog__field {
-  margin-bottom: 24px;
+.cm-btn-invite:hover,
+.cm-btn-invite:focus {
+  background: #15803d !important;
+  border-color: #15803d !important;
+  color: #fff !important;
+}
 
-  .cm-label {
-    display: block;
-    margin-bottom: 8px;
+.cm-op-invite.el-button--text {
+  color: #2563eb !important;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.invite_create_body {
+  .form_item {
+    margin-bottom: 16px;
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #475569;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .required {
+      color: #dc2626;
+      margin-left: 2px;
+    }
   }
 }
 
-.cm-dialog__section {
-  .cm-label {
-    display: block;
-  }
+.btn-cancel-green {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
 }
 
-.cm-dialog__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.invite_footer {
+  text-align: right;
+}
+</style>
+
+<style>
+.invite-code-dialog .el-dialog__title {
+  font-weight: 700;
 }
 </style>
