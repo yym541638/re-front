@@ -32,42 +32,37 @@
 
         <div v-if="loading" class="loading_state">Loading packages...</div>
 
-        <div v-else class="product_options">
-          <div
-            v-for="(product, index) in products"
-            :key="product.product_id"
-            class="product_card"
-            :class="{ 'is-featured': index === 1 }"
-          >
-            <div class="card_badge" v-if="index === 1">Recommended</div>
-            <div class="product_name">{{ product.product_name }}</div>
+        <div v-else-if="activeProduct" class="product_options">
+          <div class="product_card is-featured">
+            <div class="card_badge">Recommended</div>
+            <div class="product_name">{{ activeProduct.product_name }}</div>
             <p class="product_hint">Select trust service criteria to include</p>
 
             <div class="product_features">
               <label
-                v-for="(feature, fIndex) in product.features"
+                v-for="(feature, fIndex) in featureList"
                 :key="fIndex"
                 class="feature_item"
-                :class="{ checked: product.selectedFeatures[feature] }"
+                :class="{ checked: selectedFeatures[feature] }"
               >
                 <span>{{ feature }}</span>
-                <el-checkbox v-model="product.selectedFeatures[feature]" />
+                <el-checkbox v-model="selectedFeatures[feature]" />
               </label>
             </div>
 
             <div class="product_types">
               <div class="type_copy">
-                <strong>{{ product.type_switch ? "Type 2" : "Type 1" }}</strong>
+                <strong>{{ typeSwitch ? "Type 2" : "Type 1" }}</strong>
                 <small>
                   {{
-                    product.type_switch
+                    typeSwitch
                       ? "Operating effectiveness over a period"
                       : "Design suitability at a point in time"
                   }}
                 </small>
               </div>
               <el-switch
-                v-model="product.type_switch"
+                v-model="typeSwitch"
                 active-text="Type2"
                 inactive-text="Type1"
               />
@@ -75,14 +70,14 @@
 
             <div class="product_price">
               <span class="price_label">Annual</span>
-              <span class="price_value">${{ displayPrice(product) }}</span>
+              <span class="price_value">${{ displayPrice }}</span>
             </div>
 
             <el-button
               type="primary"
               class="buy_btn"
-              :disabled="!hasSelectedFeature(product)"
-              @click="goToPayment(product)"
+              :disabled="!hasSelectedFeature"
+              @click="goToPayment"
             >
               Buy
             </el-button>
@@ -106,37 +101,80 @@ export default {
     return {
       loading: false,
       products: [],
+      selectedFeatures: {},
+      typeSwitch: false,
       productId: "",
       purchasedProducts: [],
     };
   },
-  methods: {
-    displayPrice(product) {
+  computed: {
+    featureList() {
+      if (!this.products.length) return [];
+      const seen = new Set();
+      const list = [];
+      this.products.forEach((product) => {
+        (product.features || []).forEach((feature) => {
+          if (!seen.has(feature)) {
+            seen.add(feature);
+            list.push(feature);
+          }
+        });
+      });
+      return list;
+    },
+    selectedCount() {
+      return Object.values(this.selectedFeatures || {}).filter(Boolean).length;
+    },
+    sortedProducts() {
+      return [...this.products].sort(
+        (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
+      );
+    },
+    // 同一套选型界面，按勾选数量匹配不同价格档位（Basic 3 / Basic 4 / Suite）
+    activeProduct() {
+      const sorted = this.sortedProducts;
+      if (!sorted.length) return null;
+
+      const byName = sorted.find((product) => {
+        const match = String(product.product_name || "").match(/(\d+)/);
+        return match && Number(match[1]) === this.selectedCount;
+      });
+      if (byName) return byName;
+
+      const total = this.featureList.length;
+      if (total && this.selectedCount >= total) {
+        return sorted[sorted.length - 1];
+      }
+      if (this.selectedCount <= 3) return sorted[0];
+      if (this.selectedCount === 4 && sorted.length >= 2) return sorted[1];
+      return sorted[sorted.length - 1];
+    },
+    displayPrice() {
+      const product = this.activeProduct;
+      if (!product) return 0;
       const base = Number(product.price) || 0;
-      if (product.type_switch) {
+      if (this.typeSwitch) {
         return product.price_type2 || Math.round(base * 1.15);
       }
       return base;
     },
-    hasSelectedFeature(product) {
-      return Object.values(product.selectedFeatures || {}).some(Boolean);
+    hasSelectedFeature() {
+      return this.selectedCount > 0;
     },
+  },
+  methods: {
     async list1() {
       this.loading = true;
       try {
         const res = await this.$api.list({});
         if (res.code == 0) {
-          this.products = (res.data || []).map((product) => {
-            const selectedFeatures = {};
-            (product.features || []).forEach((feature) => {
-              Vue.set(selectedFeatures, feature, false);
-            });
-            return {
-              ...product,
-              type_switch: !!product.type_switch,
-              selectedFeatures,
-            };
+          this.products = res.data || [];
+          const selectedFeatures = {};
+          this.featureList.forEach((feature) => {
+            Vue.set(selectedFeatures, feature, false);
           });
+          this.selectedFeatures = selectedFeatures;
+          this.typeSwitch = !!(this.products[0] && this.products[0].type_switch);
         } else {
           this.$message({
             message: res.message || "Failed to load packages",
@@ -149,22 +187,25 @@ export default {
         this.loading = false;
       }
     },
-    async goToPayment(item) {
-      if (!this.hasSelectedFeature(item)) {
+    async goToPayment() {
+      if (!this.hasSelectedFeature) {
         this.$message.warning("Please select at least one feature");
         return;
       }
 
-      const selectedFeaturesList = Object.entries(item.selectedFeatures)
+      const product = this.activeProduct;
+      if (!product) return;
+
+      const selectedFeaturesList = Object.entries(this.selectedFeatures)
         .filter(([, selected]) => selected)
         .map(([feature]) => feature);
 
       const perm = {
-        productId: item.product_id,
-        auditType: item.type_switch ? "Type2" : "Type1",
-        amount: this.displayPrice(item),
+        productId: product.product_id,
+        auditType: this.typeSwitch ? "Type2" : "Type1",
+        amount: this.displayPrice,
         selectFeatures: selectedFeaturesList.join(","),
-        productName: item.product_name,
+        productName: product.product_name,
       };
 
       this.$router.push({
@@ -180,23 +221,25 @@ export default {
       }
     },
     updateSelectedFeatures() {
-      if (!this.products.length || !this.purchasedProducts.length) return;
+      if (!this.featureList.length || !this.purchasedProducts.length) return;
 
-      this.products.forEach((product) => {
-        const purchased = this.purchasedProducts.find(
-          (p) => p.product_id === product.product_id,
-        );
-        if (!purchased) return;
+      const purchased =
+        this.purchasedProducts.find(
+          (p) => p.product_id === (this.activeProduct && this.activeProduct.product_id),
+        ) || this.purchasedProducts[0];
 
-        product.type_switch = !!purchased.type_switch;
-        product.features.forEach((feature) => {
-          Vue.set(product.selectedFeatures, feature, false);
-        });
-        (purchased.features || []).forEach((feature) => {
-          if (Object.prototype.hasOwnProperty.call(product.selectedFeatures, feature)) {
-            Vue.set(product.selectedFeatures, feature, true);
-          }
-        });
+      if (!purchased) return;
+
+      this.typeSwitch = !!purchased.type_switch;
+      this.featureList.forEach((feature) => {
+        Vue.set(this.selectedFeatures, feature, false);
+      });
+      (purchased.features || []).forEach((feature) => {
+        if (
+          Object.prototype.hasOwnProperty.call(this.selectedFeatures, feature)
+        ) {
+          Vue.set(this.selectedFeatures, feature, true);
+        }
       });
     },
   },
@@ -339,13 +382,14 @@ export default {
 }
 
 .product_options {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  display: flex;
+  justify-content: center;
 }
 
 .product_card {
   position: relative;
+  width: 100%;
+  max-width: 380px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid #e2e8f0;
   border-radius: 16px;
@@ -384,6 +428,7 @@ export default {
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 6px;
+  padding-right: 96px;
 }
 
 .product_hint {
@@ -505,10 +550,6 @@ export default {
 }
 
 @media screen and (max-width: 960px) {
-  .product_options {
-    grid-template-columns: 1fr;
-  }
-
   .hero_banner {
     flex-direction: column;
     align-items: flex-start;

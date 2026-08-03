@@ -6,6 +6,7 @@ const childRouter = [
       name: "RcmFinal",
       cnName: "RcmFinal",
       id: "1428549913133977601",
+      requireProject: true,
     },
     component: (resolve) =>
       require(["@/views/longBlade/conditionMonitoring.vue"], resolve),

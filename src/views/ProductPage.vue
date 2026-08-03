@@ -149,7 +149,7 @@ export default {
     },
     goToProjectOverview(product) {
       this.$router.push({
-        path: "/ProjectOverview",
+        name: "ProjectOverview",
         query: {
           productId: product.product_id,
           productName: product.product_name,

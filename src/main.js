@@ -118,15 +118,35 @@ import VXETable from "vxe-table";
 import "vxe-table/lib/style.css";
 Vue.use(VXETable);
 import { getSystemRole } from "./utils/roles";
-// 测试阶段：放开路由；真实接口仍需登录拿到 token
+import {
+  getCurrentProjectId,
+  isProjectScopedRoute,
+} from "./utils/projectContext";
+import { Message } from "element-ui";
+
+// 测试阶段：放开登录校验；项目内页无 projectId 时回总览
 router.beforeEach((to, from, next) => {
-  // 系统级页面：仅公司管理员可进
   if (to.meta && to.meta.requireSystemRole) {
     if (getSystemRole() !== to.meta.requireSystemRole) {
       next({ name: "ProjectOverview" });
       return;
     }
   }
+
+  const routeName = to.name || (to.meta && to.meta.name);
+  const needsProject =
+    (to.meta && to.meta.requireProject) || isProjectScopedRoute(routeName);
+  if (needsProject) {
+    const projectId =
+      (to.query && (to.query.projectId || to.query.project_id)) ||
+      getCurrentProjectId();
+    if (!projectId) {
+      Message.warning("Please select a project first");
+      next({ name: "ProjectOverview" });
+      return;
+    }
+  }
+
   // TODO: 测试结束后恢复完整登录校验
   next();
 });

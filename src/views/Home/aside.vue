@@ -4,7 +4,10 @@
       <AsideItem
         :asideActiveIndex="asideActiveIndex"
         :routeMenu="displayRouteMenu"
+        :projectOptions="projectOptions"
+        :currentProjectId="String(currentProjectId || '')"
         @menuClick="menuClick"
+        @switchProject="switchProject"
       />
     </div>
   </div>
@@ -20,6 +23,13 @@ import {
   refreshSystemRole,
   persistSystemRole,
 } from "../../utils/roles";
+import {
+  getCurrentProjectId,
+  getCurrentProjectName,
+  hasCurrentProject,
+  setCurrentProject,
+  isProjectScopedRoute,
+} from "../../utils/projectContext";
 
 export default {
   name: "Aside",
@@ -33,6 +43,9 @@ export default {
     return {
       userInfo: {},
       companyName: "",
+      currentProjectId: getCurrentProjectId(),
+      currentProjectName: getCurrentProjectName(),
+      projectOptions: [],
       asideActiveIndex: "",
       defaultOpend: [],
       routes: routes[0].children,
@@ -42,10 +55,8 @@ export default {
   computed: {
     ...mapState("naviBar", ["routers", "routeMenu"]),
     displayRouteMenu() {
-      const company =
-        this.companyName ||
-        this.readCompanyName() ||
-        "Company project";
+      const projectName = this.currentProjectName;
+      const hasProject = Boolean(this.currentProjectId);
       const systemRole = getSystemRole();
       return (this.routeMenu || [])
         .filter((item) => {
@@ -53,15 +64,35 @@ export default {
           return item.requireSystemRole === systemRole;
         })
         .map((item) => {
-          if (item.RouterName === "XxxProject" || item.name === "XXX project") {
-            return { ...item, name: company };
+          if (item.RouterName === "XxxProject" || item.menuLevel === "group") {
+            return {
+              ...item,
+              name: hasProject
+                ? `Current: ${projectName || "project"}`
+                : "Select a project first",
+              disabled: !hasProject,
+              children: (item.children || []).map((child) => ({
+                ...child,
+                disabled: !hasProject && !!child.requireProject,
+              })),
+            };
+          }
+          if (item.requireProject) {
+            return { ...item, disabled: !hasProject };
           }
           return item;
         });
     },
     menuVersion() {
-      // 依赖 session 角色变化时触发重算（由父组件 forceUpdate / 事件驱动）
-      return getSystemRole() + "|" + (this.companyName || "");
+      return (
+        getSystemRole() +
+        "|" +
+        (this.companyName || "") +
+        "|" +
+        (this.currentProjectId || "") +
+        "|" +
+        (this.currentProjectName || "")
+      );
     },
   },
   watch: {
@@ -89,10 +120,8 @@ export default {
         data.map((item) => {
           if (item.children) {
             deep(item.children);
-          } else {
-            if (item.RouterName == val.name) {
-              that.menuClick(item);
-            }
+          } else if (item.RouterName == val.name) {
+            that.menuClick(item);
           }
         });
       };
@@ -105,9 +134,14 @@ export default {
       this.userInfo = JSON.parse(sessionStorage.getItem("userInfo"));
     }
     this.companyName = this.readCompanyName();
+    this.syncProjectContext();
+    this.loadProjectOptions();
     this.loadCompanyName();
     window.addEventListener("company-name-updated", this.onCompanyNameUpdated);
-    // 已登录会话：纠正系统角色后刷新菜单（无需重新登录）
+    window.addEventListener(
+      "project-context-updated",
+      this.onProjectContextUpdated,
+    );
     this.syncSystemRole();
     if (this.$route.meta.parentName && !this.$route.meta.parentParentName) {
       this.asideActiveIndex = this.$route.meta.parentName;
@@ -122,19 +156,75 @@ export default {
       "company-name-updated",
       this.onCompanyNameUpdated,
     );
+    window.removeEventListener(
+      "project-context-updated",
+      this.onProjectContextUpdated,
+    );
   },
   methods: {
     ...mapActions("naviBar", ["getMenu", "getBtns", "sendUnit", "sendEqu"]),
+    syncProjectContext() {
+      this.currentProjectId = getCurrentProjectId();
+      this.currentProjectName = getCurrentProjectName();
+    },
+    onProjectContextUpdated() {
+      this.syncProjectContext();
+      this.loadProjectOptions();
+      this.$forceUpdate();
+    },
+    async loadProjectOptions() {
+      try {
+        const res = await this.$api.projectList({
+          pageSize: 100,
+          pageNum: 1,
+        });
+        if (res && Number(res.code) === 0) {
+          const pageData = res.data || {};
+          const list =
+            pageData.list || (Array.isArray(res.data) ? res.data : []) || [];
+          this.projectOptions = list
+            .map((item) => ({
+              id: String(item.project_id || item.projectId || ""),
+              name: item.project_name || item.projectName || "Untitled",
+            }))
+            .filter((p) => p.id);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    },
+    switchProject(command) {
+      if (!command) return;
+      const hit = this.projectOptions.find((p) => p.id === String(command));
+      if (!hit) {
+        this.$message.warning("Project not found");
+        return;
+      }
+      if (String(hit.id) === String(this.currentProjectId)) {
+        this.$message.info("Already on this project");
+        return;
+      }
+      setCurrentProject(hit.id, hit.name);
+      this.syncProjectContext();
+      this.$message.success(`Switched to ${hit.name}`);
+
+      const routeName = this.$route.name;
+      if (isProjectScopedRoute(routeName)) {
+        this.$router.replace({
+          name: routeName,
+          query: {
+            ...this.$route.query,
+            projectId: hit.id,
+            projectName: hit.name,
+          },
+        });
+      }
+    },
     async syncSystemRole() {
       try {
         await refreshSystemRole(this.$api);
         const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
-        const identity = [
-          info.email,
-          info.account,
-          info.username,
-          info.name,
-        ]
+        const identity = [info.email, info.account, info.username, info.name]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -162,9 +252,7 @@ export default {
     },
     async loadCompanyName() {
       const cached = this.readCompanyName();
-      if (cached) {
-        this.companyName = cached;
-      }
+      if (cached) this.companyName = cached;
       try {
         if (this.$api && this.$api.profileCompany) {
           const res = await this.$api.profileCompany({});
@@ -187,15 +275,12 @@ export default {
         if (this.$api && this.$api.profileMe) {
           const me = await this.$api.profileMe({});
           if (me && me.code == 0 && me.data) {
-            const name =
-              me.data.company_name ||
-              me.data.companyName ||
-              "";
+            const name = me.data.company_name || me.data.companyName || "";
             if (name) this.applyCompanyName(name);
           }
         }
       } catch (e) {
-        /* keep cached / fallback */
+        /* keep cached */
       }
     },
     applyCompanyName(name) {
@@ -219,6 +304,11 @@ export default {
     },
     async menuClick(item) {
       if (!item || !item.RouterName || item.menuLevel === "group") return;
+      if (item.requireProject && !hasCurrentProject()) {
+        this.$message.warning("Please select a project first");
+        this.$router.push({ name: "ProjectOverview" });
+        return;
+      }
       sessionStorage.setItem("asideId", item.id);
       sessionStorage.setItem("asideParentId", item.parentId);
       sessionStorage.removeItem("unitId");
@@ -228,19 +318,24 @@ export default {
       this.$emit("menuClick", item);
     },
     async getPermissionVoTreeType4(item) {
-      let res = JSON.parse(JSON.stringify(unitMenuAll)),
-        tempData = [];
+      let res = JSON.parse(JSON.stringify(unitMenuAll));
+      let tempData = [];
       res.data.map((unit) => {
-        if (unit.parentId == item.id) {
-          tempData.push(unit);
-        }
+        if (unit.parentId == item.id) tempData.push(unit);
       });
       res.data = tempData;
       if (res.code == "0") {
         if (res.data && res.data.length > 0) {
           this.sendUnit(res.data);
         } else {
-          this.$router.push({ name: item.RouterName });
+          const query = {};
+          if (item.requireProject) {
+            const projectId = getCurrentProjectId();
+            const projectName = getCurrentProjectName();
+            if (projectId) query.projectId = projectId;
+            if (projectName) query.projectName = projectName;
+          }
+          this.$router.push({ name: item.RouterName, query });
           this.sendUnit([]);
         }
       }

@@ -68,6 +68,7 @@ import Aside from "./Home/aside.vue";
 import Header from "./Home/header.vue";
 import { equMenuAll } from "../utils/equMenu";
 import { refreshSystemRole, persistSystemRole } from "../utils/roles";
+import { isProjectScopedRoute } from "../utils/projectContext";
 export default {
   data() {
     return {
@@ -219,9 +220,9 @@ export default {
     },
     clickTab(url, name, id) {
       const query = {};
-      if (url === "RequestMaster") {
-        const projectId = sessionStorage.getItem("currentProjectId");
-        const projectName = sessionStorage.getItem("currentProjectName");
+      const projectId = sessionStorage.getItem("currentProjectId");
+      const projectName = sessionStorage.getItem("currentProjectName");
+      if (isProjectScopedRoute(url)) {
         if (projectId) query.projectId = projectId;
         if (projectName) query.projectName = projectName;
       }
@@ -230,12 +231,8 @@ export default {
           "currentRequestMasterId",
         );
         const masterName = sessionStorage.getItem("currentRequestMasterName");
-        const projectId = sessionStorage.getItem("currentProjectId");
-        const projectName = sessionStorage.getItem("currentProjectName");
         if (requestMasterId) query.requestMasterId = requestMasterId;
         if (masterName) query.masterName = masterName;
-        if (projectId) query.projectId = projectId;
-        if (projectName) query.projectName = projectName;
       }
       this.$router.push({ name: url, query });
       this.$store.commit("SET_ACTIVE_TAB", name);

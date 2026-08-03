@@ -91,6 +91,19 @@ export const requestMasterDeleteTemplate = (id, templateFileId, params) =>
     `/request-master/${id}/template-files/${templateFileId}`,
     params,
   );
+/** View：下载已上传的模板文件 */
+export const requestMasterDownloadTemplateFile = (
+  requestMasterId,
+  templateFileId,
+  params,
+) =>
+  http(
+    "get",
+    `/request-master/${requestMasterId}/template-files/${templateFileId}/download`,
+    params,
+    "application/json;charset=UTF-8",
+    "blob",
+  );
 export const requestMasterDownloadTemplate = (params) =>
   http(
     "get",

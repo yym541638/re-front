@@ -3,19 +3,6 @@
     <div class="cm-page__body">
     <div class="cm-toolbar">
       <div class="cm-toolbar__left">
-        <el-select
-          v-model="contextFilter"
-          class="cm-select"
-          style="width: 220px"
-          placeholder="Select context"
-        >
-          <el-option
-            v-for="item in contextOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </el-select>
         <el-button class="cm-btn-primary" type="primary" @click="openSpec('create')">
           New
         </el-button>
@@ -140,6 +127,8 @@
 </template>
 
 <script>
+import { setCurrentProject } from "../utils/projectContext";
+
 const DEFAULT_STATUS_OPTIONS = [
   { value: "COMPLETED", label: "Completed" },
   { value: "CANCELLED", label: "Cancelled" },
@@ -175,10 +164,6 @@ export default {
   name: "RequestMaster",
   data() {
     return {
-      contextFilter: "soc2",
-      contextOptions: [
-        { label: "SOC2-Request Master", value: "soc2" },
-      ],
       tableTitles: [
         { fieldName: "requestId", titleName: "request ID" },
         { fieldName: "requestMasterName", titleName: "request master name" },
@@ -252,12 +237,14 @@ export default {
     persistProjectContext(projectId, projectName) {
       if (projectId) {
         this.resolvedProjectId = String(projectId);
-        sessionStorage.setItem("currentProjectId", String(projectId));
       }
       if (projectName) {
         this.resolvedProjectName = projectName;
-        sessionStorage.setItem("currentProjectName", projectName);
       }
+      setCurrentProject(
+        projectId || this.resolvedProjectId,
+        projectName || this.resolvedProjectName,
+      );
     },
     async ensureProjectContext() {
       const fromRoute = this.$route.query.projectId;
@@ -273,27 +260,9 @@ export default {
           sessionStorage.getItem("currentProjectName") || "";
         return cached;
       }
-      try {
-        const res = await this.$api.projectList({
-          pageSize: 50,
-          pageNum: 1,
-        });
-        if (res.code == 0) {
-          const pageData = res.data || {};
-          const list = pageData.list || (Array.isArray(res.data) ? res.data : []);
-          if (list.length) {
-            const first = list[0];
-            const id = first.project_id || first.projectId;
-            const name = first.project_name || first.projectName || "";
-            if (id) {
-              this.persistProjectContext(id, name);
-              return String(id);
-            }
-          }
-        }
-      } catch (e) {
-        /* ignore */
-      }
+      // 不再默认选中第一个项目，必须从 Project overview 进入
+      this.$message.warning("Please select a project first");
+      this.$router.replace({ name: "ProjectOverview" });
       return "";
     },
     formatDateTime(value) {
@@ -357,11 +326,13 @@ export default {
       }
     },
     async loadList() {
+      if (!this.projectId) {
+        this.tableData = [];
+        this.tablePage.total = 0;
+        return;
+      }
       try {
-        const params = {};
-        if (this.projectId) {
-          params.projectId = this.projectId;
-        }
+        const params = { projectId: this.projectId };
         const res = await this.$api.requestMasterList(params);
         if (res.code == 0) {
           const list = Array.isArray(res.data)

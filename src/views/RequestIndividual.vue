@@ -19,6 +19,15 @@
         </div>
         <div class="cm-toolbar__right">
           <span class="cm-label">{{ currentVersionLabel || "No version" }}</span>
+          <el-button
+            class="cm-btn-primary"
+            type="primary"
+            :loading="savingVersion"
+            :disabled="!requestMasterId"
+            @click="handleVersionSave"
+          >
+            Version Save
+          </el-button>
           <el-button class="cm-btn-secondary" @click="openVersionSelect">
             Version Select
           </el-button>
@@ -90,6 +99,14 @@
             >
               Delete
             </el-button>
+          </div>
+          <div slot="reviewStatus" slot-scope="{ row }">
+            <span
+              class="review_ai_tag"
+              :class="reviewAiToneClass(row.reviewAiRaw || row.reviewStatus)"
+            >
+              {{ row.reviewStatus || "-" }}
+            </span>
           </div>
         </Vxetable>
       </div>
@@ -229,6 +246,16 @@
           <label>send request Date</label>
           <el-input :value="formData.sendDateDisplay || '-'" disabled />
         </div>
+
+        <div class="form_item" v-if="formMode !== 'create'">
+          <label>Request Evidence Review AI</label>
+          <div
+            class="review_ai_value"
+            :class="reviewAiToneClass(formData.reviewAiRaw || formData.reviewAiStatus)"
+          >
+            {{ formData.reviewAiStatus || "-" }}
+          </div>
+        </div>
       </div>
 
       <div class="spec_footer">
@@ -282,6 +309,7 @@
     <FileManagement
       :visible="fileDialogVisible"
       title="File management"
+      :request-master-id="requestMasterId"
       @update:visible="fileDialogVisible = $event"
     />
   </div>
@@ -300,8 +328,40 @@ const emptyForm = () => ({
   creationDateDisplay: "-",
   commentContent: "",
   sendDateDisplay: "-",
+  reviewAiStatus: "",
+  reviewAiRaw: "",
   evidences: [],
 });
+
+/** AI 返回 red/yellow/green → 列表展示文案 */
+const REVIEW_AI_LABELS = {
+  red: "not right",
+  yellow: "need attention",
+  green: "all good",
+};
+
+const mapReviewAiStatus = (raw) => {
+  if (raw == null || raw === "") return "";
+  const text = String(raw).trim();
+  const lower = text.toLowerCase();
+  if (REVIEW_AI_LABELS[lower]) return REVIEW_AI_LABELS[lower];
+  if (lower === "not right" || lower === "need attention" || lower === "all good") {
+    return lower;
+  }
+  return text;
+};
+
+const extractReviewAiRaw = (source = {}) =>
+  source.request_evidence_review_ai_status ||
+  source.requestEvidenceReviewAiStatus ||
+  source.request_individual_review_status ||
+  source.requestIndividualReviewStatus ||
+  source.review_ai_status ||
+  source.reviewAiStatus ||
+  source.reviewStatus ||
+  source.ai_status ||
+  source.aiStatus ||
+  "";
 
 const nowDateTime = () => {
   const d = new Date();
@@ -320,7 +380,6 @@ export default {
   data() {
     return {
       tableTitles: [
-        { fieldName: "requestCode", titleName: "No/asset ID" },
         { fieldName: "requestName", titleName: "Request Name" },
         { fieldName: "ccCriteria", titleName: "CC Criteria" },
         { fieldName: "pointsOfFocus", titleName: "Point of focus" },
@@ -339,7 +398,12 @@ export default {
           titleName: "Upload Evidence Status",
         },
         { fieldName: "sendDateDisplay", titleName: "Request Send Date" },
-        { fieldName: "reviewStatus", titleName: "Review AI" },
+        {
+          fieldName: "reviewStatus",
+          titleName: "Review AI",
+          fontendType: "slot",
+          width: 140,
+        },
         { fieldName: "reviewComment", titleName: "Review AI Comment" },
       ],
       tableData: [],
@@ -353,6 +417,7 @@ export default {
       versions: [],
       selectedVersionId: null,
       currentVersionLabel: "",
+      savingVersion: false,
       loading: false,
       generating: false,
       sending: false,
@@ -391,7 +456,16 @@ export default {
       const text = String(value).replace("T", " ").trim();
       return text.length >= 19 ? text.slice(0, 19) : text;
     },
+    reviewAiToneClass(rawOrLabel) {
+      const label = mapReviewAiStatus(rawOrLabel);
+      if (label === REVIEW_AI_LABELS.red) return "is-red";
+      if (label === REVIEW_AI_LABELS.yellow) return "is-yellow";
+      if (label === REVIEW_AI_LABELS.green) return "is-green";
+      return "";
+    },
     mapRow(item) {
+      const reviewAiRaw = extractReviewAiRaw(item);
+      const reviewStatus = mapReviewAiStatus(reviewAiRaw) || "-";
       return {
         ...item,
         requestId: item.request_id || item.requestId,
@@ -421,13 +495,12 @@ export default {
         sendDateDisplay: this.formatDateTime(
           item.request_send_date || item.requestSendDate,
         ),
-        reviewStatus:
-          item.request_evidence_review_ai_status ||
-          item.request_individual_review_status ||
-          "-",
+        reviewAiRaw,
+        reviewStatus,
         reviewComment:
           item.ai_comment_content ||
           item.request_individual_review_comment ||
+          item.requestIndividualReviewComment ||
           "-",
       };
     },
@@ -530,6 +603,7 @@ export default {
           return;
         }
         const d = res.data || {};
+        const reviewAiRaw = extractReviewAiRaw(d);
         this.formData = {
           requestId: d.request_id || row.requestId,
           requestName: d.request_name || "",
@@ -542,6 +616,8 @@ export default {
           sendDateDisplay: this.formatDateTime(
             d.request_send_date || d.requestSendDate,
           ),
+          reviewAiRaw,
+          reviewAiStatus: mapReviewAiStatus(reviewAiRaw),
           evidences: d.evidences || [],
         };
         this.drawerVisible = true;
@@ -605,16 +681,30 @@ export default {
       }
       this.sending = true;
       try {
-        // POST /api/request/individual/{requestId}/send
+        // POST /api/request/individual/{requestId}/send — AI 返回 red/yellow/green
         const res = await this.$api.requestIndividualSend(requestId);
         if (res && Number(res.code) === 0) {
           this.$message.success("Sent successfully");
+          const data = res.data || {};
+          const reviewAiRaw = extractReviewAiRaw(data);
           if (this.drawerVisible && this.formData.requestId == requestId) {
-            this.formData.sendDateDisplay = nowDateTime();
+            this.formData.sendDateDisplay =
+              this.formatDateTime(
+                data.request_send_date || data.requestSendDate,
+              ) || nowDateTime();
+            if (reviewAiRaw) {
+              this.formData.reviewAiRaw = reviewAiRaw;
+              this.formData.reviewAiStatus = mapReviewAiStatus(reviewAiRaw);
+            }
           }
-          this.loadList({ tryGenerateIfEmpty: false });
-          if (this.drawerVisible && this.formData.requestId == requestId) {
-            this.openForm(this.formMode, { requestId });
+          await this.loadList({ tryGenerateIfEmpty: false });
+          // 若 send 响应未带 AI 结果，刷新详情补齐
+          if (
+            this.drawerVisible &&
+            this.formData.requestId == requestId &&
+            !reviewAiRaw
+          ) {
+            await this.openForm(this.formMode, { requestId });
           }
         } else {
           this.$message.warning(res.message || "Send failed");
@@ -691,6 +781,40 @@ export default {
     openVersionSelect() {
       this.versionDialogVisible = true;
       this.loadVersions();
+    },
+    async handleVersionSave() {
+      if (!this.requestMasterId) {
+        this.$message.warning("Missing request master id");
+        return;
+      }
+      if (!this.tableData.length) {
+        this.$message.warning("No records to save");
+        return;
+      }
+      this.savingVersion = true;
+      try {
+        // POST /request-master/{id}/versions/save — Body 为空，保存当前 Individual 清单快照
+        const res = await this.$api.requestMasterSaveVersion(
+          this.requestMasterId,
+        );
+        if (res.code == 0) {
+          const data = res.data || {};
+          if (data.version_label) {
+            this.currentVersionLabel = data.version_label;
+          }
+          if (data.version_id) {
+            this.selectedVersionId = data.version_id;
+          }
+          this.$message.success("Version saved");
+          await this.loadVersions();
+        } else {
+          this.$message.error(res.message || "Version save failed");
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || "Version save failed");
+      } finally {
+        this.savingVersion = false;
+      }
     },
     versionOptionLabel(v) {
       const label = v.version_label || `Version ${v.version_id}`;
@@ -862,6 +986,47 @@ export default {
 
 .evidence_upload {
   padding: 8px;
+}
+
+.review_ai_value,
+.review_ai_tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.review_ai_value {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 36px;
+}
+
+.review_ai_value.is-red,
+.review_ai_tag.is-red {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.review_ai_value.is-yellow,
+.review_ai_tag.is-yellow {
+  background: #fffbeb;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.review_ai_value.is-green,
+.review_ai_tag.is-green {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #bbf7d0;
 }
 
 .cm-empty-tip {

@@ -63,7 +63,7 @@
               class="cm-op-link"
               @click="Enter(row)"
             >
-              Detail
+              Enter project
             </el-button>
           </div>
         </Vxetable>
@@ -126,36 +126,10 @@
           />
         </div>
 
-        <div class="form_item">
-          <label>Project User management:</label>
-          <div class="user_table_container">
-            <table class="user_table">
-              <thead>
-                <tr>
-                  <th>Role</th>
-                  <th>Name</th>
-                  <th>Operation</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(user, index) in formData.users" :key="index">
-                  <td>{{ user.role }}</td>
-                  <td>{{ user.name || "-" }}</td>
-                  <td>
-                    <el-button
-                      class="edit_link"
-                      type="text"
-                      :disabled="specMode === 'view'"
-                      @click="openUserInvites(user.role)"
-                    >
-                      edit
-                    </el-button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <p class="access_hint">
+          Manage project members and roles in
+          <strong>Access management</strong>.
+        </p>
       </div>
 
       <div class="spec_footer" v-if="specMode !== 'view'">
@@ -189,90 +163,18 @@
       </div>
     </el-dialog>
 
-    <!-- User Invites ?? -->
-    <el-dialog
-      title="User Invites"
-      :visible.sync="userInvitesVisible"
-      width="800px"
-      :close-on-click-modal="false"
-    >
-      <div class="invites_container">
-        <div class="invites_column">
-          <el-input
-            v-model="searchKeyword"
-            placeholder="user search"
-            class="search_input"
-            suffix-icon="el-icon-search"
-          />
-          <div class="user_list">
-            <div
-              v-for="user in availableUsers"
-              :key="user.user_id"
-              class="user_item"
-            >
-              <span class="user_name">{{ user.username }}</span>
-              <button
-                class="add_btn"
-                :class="{ disabled: isUserSelected(user.user_id) }"
-                @click="addToSelected(user)"
-                :disabled="isUserSelected(user.user_id)"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="invites_arrow">
-          <div class="arrow_item">?</div>
-          <div class="arrow_item">?</div>
-          <div class="arrow_item">?</div>
-        </div>
-
-        <div class="invites_column">
-          <button class="invite_link_btn">Invite Link</button>
-          <div class="user_list">
-            <div
-              v-for="user in selectedUsers"
-              :key="user.user_id"
-              class="user_item"
-            >
-              <span class="user_name">{{ user.username }}</span>
-              <button class="remove_btn" @click="removeFromSelected(user)">
-                -
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div slot="footer" class="invites_footer">
-        <el-button type="primary" @click="handleInvitesConfirm">Confirm</el-button>
-        <el-button class="btn-cancel-green" @click="handleInvitesCancel">
-          Cancel
-        </el-button>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
 <script>
 import { isCompAdmin } from "../utils/roles";
-
-const defaultUsers = () => [
-  { role: "Project Owner", roleCode: "PROJECT_OWNER", name: "", userId: "" },
-  { role: "Document Owner", roleCode: "DOCUMENT_OWNER", name: "", userId: "" },
-  { role: "General User", roleCode: "GENERAL_USER", name: "", userId: "" },
-  { role: "Manager tier 1", roleCode: "MANAGER", name: "", userId: "" },
-  { role: "Manager tier 2", roleCode: "MANAGER_2", name: "", userId: "" },
-];
+import { setCurrentProject } from "../utils/projectContext";
 
 const emptyForm = () => ({
   projectName: "",
   projectInfo: "",
   startDate: "",
   endDate: "",
-  users: defaultUsers(),
   pictureFile: [],
 });
 
@@ -281,7 +183,6 @@ export default {
   data() {
     return {
       tableTitles: [
-        { fieldName: "project_id", titleName: "Project ID" },
         { fieldName: "project_name", titleName: "Project Name" },
         { fieldName: "project_info", titleName: "Project Info" },
         { fieldName: "start_date", titleName: "Start Date" },
@@ -300,11 +201,6 @@ export default {
       formData: emptyForm(),
       inviteCodeVisible: false,
       inviteCode: "",
-      userInvitesVisible: false,
-      currentEditingRole: "",
-      searchKeyword: "",
-      availableUsers: [],
-      selectedUsers: [],
     };
   },
   computed: {
@@ -324,62 +220,6 @@ export default {
       const text = String(value).trim();
       if (text.length >= 10) return text.slice(0, 10);
       return text;
-    },
-    buildMembersPayload(users) {
-      const members = [];
-      (users || []).forEach((user) => {
-        if (!user.name || !user.userId) return;
-        const ids = String(user.userId)
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const names = String(user.name)
-          .split(",")
-          .map((s) => s.trim());
-        ids.forEach((id, idx) => {
-          const userId = Number(id);
-          if (!userId) return;
-          members.push({
-            userId,
-            memberRole: user.roleCode || user.role,
-            displayName: names[idx] || names[0] || "",
-          });
-        });
-      });
-      return members;
-    },
-    mapRoleSlotsToUsers(roleSlots, members) {
-      const users = defaultUsers();
-      const source = ((roleSlots && roleSlots.length ? roleSlots : null) || [])
-        .filter((slot) => {
-          const code = slot.role_code || slot.roleCode || "";
-          return code !== "COMP_ADMIN" && code !== "administrator";
-        });
-      if (source.length) {
-        return source.map((slot) => ({
-          role: slot.role_name || slot.roleName || slot.role_code || "General User",
-          roleCode: slot.role_code || slot.roleCode || "",
-          name: slot.display_name || "",
-          userId: slot.user_id || "",
-          email: slot.email || "",
-        }));
-      }
-      if (members && members.length) {
-        members.forEach((m) => {
-          const hit = users.find((u) => u.role === m.memberRole && !u.name);
-          if (hit) {
-            hit.name = m.displayName || m.email || "";
-            hit.userId = m.userId || "";
-          } else {
-            users.push({
-              role: m.memberRole || "Internal User",
-              name: m.displayName || "",
-              userId: m.userId || "",
-            });
-          }
-        });
-      }
-      return users;
     },
     async VoPageListByDto(page) {
       this.tablePage.pageIndex = page;
@@ -419,14 +259,6 @@ export default {
           return;
         }
         this.formData = emptyForm();
-        try {
-          const slotRes = await this.$api.projectRoleSlots({});
-          if (slotRes.code == 0 && Array.isArray(slotRes.data)) {
-            this.formData.users = this.mapRoleSlotsToUsers(slotRes.data);
-          }
-        } catch (e) {
-          /* ignore */
-        }
         this.drawerVisible = true;
         return;
       }
@@ -450,7 +282,6 @@ export default {
           projectInfo: project.project_info || "",
           startDate: project.start_date || "",
           endDate: project.end_date || "",
-          users: this.mapRoleSlotsToUsers(detail.roleSlots, detail.members),
           pictureFile: [],
           raw: project,
         };
@@ -468,12 +299,12 @@ export default {
         this.$message.warning("Project start date is required");
         return;
       }
+      // 人员与角色统一在 Access management 管理，创建/编辑项目不再提交 members
       const payload = {
         projectName: formData.projectName,
         projectInfo: formData.projectInfo || "",
         startDate: formData.startDate,
         endDate: formData.endDate || null,
-        members: this.buildMembersPayload(formData.users),
       };
       try {
         let res;
@@ -521,76 +352,14 @@ export default {
         this.$message.error((e && e.message) || "Redeem failed");
       }
     },
-    async openUserInvites(role) {
-      this.currentEditingRole = role;
-      this.selectedUsers = [];
-      this.userInvitesVisible = true;
-      try {
-        let companyName = "Demo Company";
-        try {
-          const info = JSON.parse(sessionStorage.getItem("userInfo") || "{}");
-          companyName = info.company_name || info.companyName || companyName;
-        } catch (e) {
-          /* ignore */
-        }
-        const res = await this.$api.companyUsers({ companyName });
-        if (res.code == 0) {
-          this.availableUsers = res.data || [];
-        } else {
-          this.$message.warning(res.message || "Load users failed");
-        }
-      } catch (e) {
-        this.$message.error((e && e.message) || "Load users failed");
-      }
-    },
-    isUserSelected(userId) {
-      return this.selectedUsers.some((user) => user.user_id === userId);
-    },
-    addToSelected(user) {
-      if (!this.isUserSelected(user.user_id)) {
-        this.selectedUsers.push({ ...user });
-      }
-    },
-    removeFromSelected(user) {
-      this.selectedUsers = this.selectedUsers.filter(
-        (u) => u.user_id !== user.user_id,
-      );
-    },
-    handleInvitesConfirm() {
-      if (this.selectedUsers.length > 0 && this.currentEditingRole) {
-        const selectedNames = this.selectedUsers.map((user) => user.username);
-        const selectedIds = this.selectedUsers.map((user) => user.user_id);
-        const combinedName = selectedNames.join(", ");
-        const combinedIds = selectedIds.join(", ");
-        const target = this.formData.users.find(
-          (user) => user.role === this.currentEditingRole && !user.name,
-        );
-        if (target) {
-          target.name = combinedName;
-          target.userId = combinedIds;
-        } else {
-          this.formData.users.push({
-            role: this.currentEditingRole,
-            name: combinedName,
-            userId: combinedIds,
-          });
-        }
-      }
-      this.$message.success("User invites updated");
-      this.userInvitesVisible = false;
-    },
-    handleInvitesCancel() {
-      this.userInvitesVisible = false;
-    },
     Enter(row) {
       const projectName = row.project_name || row.projectName;
       const projectId = row.project_id || row.projectId;
-      if (projectId) {
-        sessionStorage.setItem("currentProjectId", String(projectId));
+      if (!projectId) {
+        this.$message.warning("Missing project id");
+        return;
       }
-      if (projectName) {
-        sessionStorage.setItem("currentProjectName", projectName);
-      }
+      setCurrentProject(projectId, projectName);
       const newTagName = `${projectName}-RequestMaster`;
       const existingTag = this.$store.state.tagsArr.find(
         (tag) => tag.RouterName === "RequestMaster",
@@ -612,7 +381,7 @@ export default {
       }
       this.$store.commit("SET_ACTIVE_TAB", newTagName);
       this.$router.push({
-        path: "/RequestMaster",
+        name: "RequestMaster",
         query: {
           projectName: projectName,
           projectId: projectId,
@@ -676,33 +445,18 @@ export default {
   }
 }
 
-.user_table_container {
-  overflow: auto;
-  border: 1px solid #e2e8f0;
+.access_hint {
+  margin: 8px 0 0;
+  padding: 10px 12px;
   border-radius: 6px;
-}
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  color: #0f766e;
+  font-size: 12px;
+  line-height: 1.5;
 
-.user_table {
-  width: 100%;
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: 8px 10px;
-    text-align: left;
-    border-bottom: 1px solid #eef2f7;
-    font-size: 12px;
-  }
-
-  th {
-    background: #f8fafc;
-    font-weight: 600;
-    color: #475569;
-  }
-
-  .edit_link {
-    color: #2563eb !important;
-    padding: 0 !important;
+  strong {
+    font-weight: 700;
   }
 }
 
@@ -723,87 +477,6 @@ export default {
   color: #fff !important;
 }
 
-.invites_container {
-  display: flex;
-  gap: 16px;
-  height: 400px;
-}
-
-.invites_column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.search_input {
-  margin-bottom: 10px;
-}
-
-.invite_link_btn {
-  background-color: #2563eb;
-  color: #fff;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  align-self: flex-end;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-
-.user_list {
-  flex: 1;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  overflow-y: auto;
-}
-
-.user_item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #f1f5f9;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.add_btn,
-.remove_btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #2563eb;
-  color: #fff;
-}
-
-.add_btn.disabled {
-  background-color: #cbd5e1;
-  cursor: not-allowed;
-}
-
-.invites_arrow {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-
-  .arrow_item {
-    font-size: 18px;
-    color: #2563eb;
-    text-align: center;
-  }
-}
-
-.invites_footer,
 .invite_footer {
   text-align: right;
 }

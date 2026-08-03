@@ -4,9 +4,33 @@
       <div v-if="item.dividerBefore" class="menu-divider"></div>
 
       <div v-if="item.children && item.children.length" class="menu-group">
-        <div class="menu-group-title">
+        <div class="menu-group-title" :class="{ 'is-empty': item.disabled }">
           <i :class="['menu-icon', iconClass(item)]" aria-hidden="true"></i>
-          <span class="menu-text">{{ item.name }}</span>
+          <span class="menu-text" :title="item.name">{{ item.name }}</span>
+          <el-dropdown
+            v-if="!item.disabled"
+            trigger="click"
+            placement="bottom-start"
+            @command="(cmd) => $emit('switchProject', cmd)"
+          >
+            <button type="button" class="switch-project-btn" @click.stop>
+              Switch
+              <i class="el-icon-arrow-down"></i>
+            </button>
+            <el-dropdown-menu slot="dropdown" class="project-switch-menu">
+              <el-dropdown-item
+                v-for="p in projectOptions"
+                :key="p.id"
+                :command="p.id"
+                :class="{ 'is-current': p.id === currentProjectId }"
+              >
+                {{ p.name }}
+              </el-dropdown-item>
+              <el-dropdown-item v-if="!projectOptions.length" disabled>
+                No projects
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
         </div>
         <div class="menu-children">
           <div
@@ -16,6 +40,7 @@
             :class="{
               'is-active': asideActiveIndex === child.RouterName,
               'is-last': cIndex === item.children.length - 1,
+              'is-disabled': child.disabled,
             }"
             @click="menuClick(child)"
           >
@@ -39,7 +64,10 @@
         class="menu-item"
         :class="[
           levelClass(item),
-          { 'is-active': asideActiveIndex === item.RouterName },
+          {
+            'is-active': asideActiveIndex === item.RouterName,
+            'is-disabled': item.disabled,
+          },
         ]"
         @click="menuClick(item)"
       >
@@ -77,6 +105,14 @@ export default {
       type: String,
       default: "",
     },
+    projectOptions: {
+      type: Array,
+      default: () => [],
+    },
+    currentProjectId: {
+      type: String,
+      default: "",
+    },
   },
   methods: {
     iconClass(item) {
@@ -91,6 +127,11 @@ export default {
     },
     menuClick(item) {
       if (!item.RouterName || item.menuLevel === "group") return;
+      if (item.disabled) {
+        this.$message.warning("Please select a project first");
+        this.$router.push({ name: "ProjectOverview" });
+        return;
+      }
       this.$emit("menuClick", item);
     },
   },
@@ -154,6 +195,21 @@ export default {
   background: #f1f5f9;
 }
 
+.menu-item.is-disabled,
+.menu-leaf.is-disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.72;
+
+  &:hover {
+    background: transparent;
+  }
+
+  .menu-icon {
+    color: #cbd5e1;
+  }
+}
+
 .menu-group {
   margin: 2px 0;
 }
@@ -167,6 +223,35 @@ export default {
 
   &:hover {
     background: transparent;
+  }
+
+  &.is-empty {
+    color: #94a3b8;
+    font-style: italic;
+  }
+
+  .switch-project-btn {
+    flex-shrink: 0;
+    margin-left: 6px;
+    padding: 2px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #fff;
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+
+    &:hover {
+      border-color: #0f766e;
+      background: rgba(15, 118, 110, 0.06);
+    }
+
+    .el-icon-arrow-down {
+      margin-left: 2px;
+      font-size: 10px;
+    }
   }
 }
 
@@ -254,5 +339,13 @@ export default {
     background: #0f766e;
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
   }
+}
+</style>
+
+<style>
+.project-switch-menu .el-dropdown-menu__item.is-current {
+  color: #0f766e;
+  font-weight: 700;
+  background: rgba(15, 118, 110, 0.08);
 }
 </style>
