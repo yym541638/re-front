@@ -168,7 +168,10 @@
 
 <script>
 import { isCompAdmin } from "../utils/roles";
-import { setCurrentProject } from "../utils/projectContext";
+import {
+  setCurrentProject,
+  ensureDefaultProject,
+} from "../utils/projectContext";
 
 const emptyForm = () => ({
   projectName: "",
@@ -239,6 +242,10 @@ export default {
           }));
           this.tablePage.total =
             pageData.totalCount || pageData.total || res.total || 0;
+          // 分页列表可能不完整：当前/上次不在本页时不误选本页第一条
+          ensureDefaultProject(this.tableData, {
+            allowReplaceMissing: false,
+          });
         } else {
           this.$message.warning(res.message || "Load project list failed");
         }

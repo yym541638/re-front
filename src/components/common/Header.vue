@@ -70,6 +70,8 @@
 </template>
 
 <script>
+import { clearCurrentProject } from "../../utils/projectContext";
+
 export default {
   name: "CommonHeader",
   props: {
@@ -210,6 +212,7 @@ export default {
       sessionStorage.removeItem("system_role");
       localStorage.removeItem("account");
       sessionStorage.removeItem("tags");
+      clearCurrentProject();
       this.$store.commit("UPDATE_TAGS", [
         {
           name: "ProjectOverview",

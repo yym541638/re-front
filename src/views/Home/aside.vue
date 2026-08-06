@@ -6,6 +6,7 @@
         :routeMenu="displayRouteMenu"
         :projectOptions="projectOptions"
         :currentProjectId="String(currentProjectId || '')"
+        :currentProjectName="currentProjectName || ''"
         @menuClick="menuClick"
         @switchProject="switchProject"
       />
@@ -28,6 +29,7 @@ import {
   getCurrentProjectName,
   hasCurrentProject,
   setCurrentProject,
+  ensureDefaultProject,
   isProjectScopedRoute,
 } from "../../utils/projectContext";
 
@@ -169,7 +171,10 @@ export default {
     },
     onProjectContextUpdated() {
       this.syncProjectContext();
-      this.loadProjectOptions();
+      // 仅在尚无列表时拉取，避免 ensureDefaultProject → setCurrentProject 触发循环请求
+      if (!this.projectOptions.length) {
+        this.loadProjectOptions();
+      }
       this.$forceUpdate();
     },
     async loadProjectOptions() {
@@ -188,6 +193,8 @@ export default {
               name: item.project_name || item.projectName || "Untitled",
             }))
             .filter((p) => p.id);
+          ensureDefaultProject(this.projectOptions);
+          this.syncProjectContext();
         }
       } catch (e) {
         /* ignore */

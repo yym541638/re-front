@@ -221,6 +221,17 @@ export const rcmUploadToManual = (rcmId, params) =>
 export const rcmSaveVersion = (rcmId, params) =>
   http("post", `/rcm/${rcmId}/versions`, params);
 
+/* ===================== Risk Table ===================== */
+export const riskTableList = (params) =>
+  http("get", `/risk-table/list`, params);
+export const riskTableDetail = (riskId, params) =>
+  http("get", `/risk-table/${riskId}`, params);
+export const riskTableCreate = (params) => http("post", `/risk-table`, params);
+export const riskTableUpdate = (riskId, params) =>
+  http("put", `/risk-table/${riskId}`, params);
+export const riskTableDelete = (riskId, params) =>
+  http("delete", `/risk-table/${riskId}`, params);
+
 /* ===================== Operation Log ===================== */
 export const operationLogList = (params) =>
   http("get", `/operation-log/list`, params);

@@ -144,10 +144,12 @@
         >
           <label>{{ slot.label }}</label>
           <el-select
-            v-model="slot.userId"
+            v-model="slot.userIds"
+            multiple
             clearable
             filterable
-            placeholder="Select user"
+            collapse-tags
+            placeholder="Select user(s)"
             style="width: 100%"
           >
             <el-option
@@ -233,15 +235,24 @@ export default {
       PROJECT_ROLES.forEach((col) => {
         mapped[col.fieldName] = "";
       });
+      const namesByField = {};
       (roleSlots || []).forEach((slot) => {
         const code = slot.role_code || slot.roleCode || "";
         const field = ROLE_CODE_TO_FIELD[code];
         if (!field) return;
-        mapped[field] =
+        const name =
           slot.display_name ||
           slot.displayName ||
           slot.email ||
           "";
+        if (!name) return;
+        if (!namesByField[field]) namesByField[field] = [];
+        if (!namesByField[field].includes(name)) {
+          namesByField[field].push(name);
+        }
+      });
+      Object.keys(namesByField).forEach((field) => {
+        mapped[field] = namesByField[field].join(", ");
       });
       return mapped;
     },
@@ -431,15 +442,18 @@ export default {
       this.membersTargetName = row.project_name || "";
       const slots = row.roleSlots || [];
       this.memberSlots = PROJECT_ROLES.map((role) => {
-        const hit = slots.find(
+        const hits = slots.filter(
           (s) => (s.role_code || s.roleCode) === role.code,
         );
+        const userIds = [];
+        hits.forEach((hit) => {
+          const uid = Number(hit.user_id || hit.userId || "") || null;
+          if (uid && !userIds.includes(uid)) userIds.push(uid);
+        });
         return {
           code: role.code,
           label: role.label,
-          userId: hit
-            ? Number(hit.user_id || hit.userId || "") || null
-            : null,
+          userIds,
         };
       });
       await this.loadCompanyUsers();
@@ -448,9 +462,7 @@ export default {
         this.companyUserOptions.map((u) => u.userId),
       );
       this.memberSlots.forEach((slot) => {
-        if (slot.userId && !validIds.has(slot.userId)) {
-          slot.userId = null;
-        }
+        slot.userIds = (slot.userIds || []).filter((id) => validIds.has(id));
       });
       this.membersVisible = true;
     },
@@ -458,18 +470,24 @@ export default {
       if (!this.membersTargetId) return;
       this.membersSaving = true;
       try {
-        const members = this.memberSlots
-          .filter((s) => s.userId)
-          .map((s) => {
+        const members = [];
+        const seen = new Set();
+        this.memberSlots.forEach((s) => {
+          (s.userIds || []).forEach((userId) => {
+            if (!userId) return;
+            const key = `${userId}::${s.code}`;
+            if (seen.has(key)) return;
+            seen.add(key);
             const user = this.companyUserOptions.find(
-              (u) => u.userId === s.userId,
+              (u) => u.userId === userId,
             );
-            return {
-              userId: s.userId,
+            members.push({
+              userId,
               memberRole: s.code,
               displayName: user ? user.displayName : "",
-            };
+            });
           });
+        });
         const res = await this.$api.projectSaveMembers(this.membersTargetId, {
           members,
         });

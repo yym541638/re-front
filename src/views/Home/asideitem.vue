@@ -6,31 +6,33 @@
       <div v-if="item.children && item.children.length" class="menu-group">
         <div class="menu-group-title" :class="{ 'is-empty': item.disabled }">
           <i :class="['menu-icon', iconClass(item)]" aria-hidden="true"></i>
-          <span class="menu-text" :title="item.name">{{ item.name }}</span>
-          <el-dropdown
-            v-if="!item.disabled"
-            trigger="click"
-            placement="bottom-start"
-            @command="(cmd) => $emit('switchProject', cmd)"
-          >
-            <button type="button" class="switch-project-btn" @click.stop>
-              Switch
-              <i class="el-icon-arrow-down"></i>
-            </button>
-            <el-dropdown-menu slot="dropdown" class="project-switch-menu">
-              <el-dropdown-item
-                v-for="p in projectOptions"
-                :key="p.id"
-                :command="p.id"
-                :class="{ 'is-current': p.id === currentProjectId }"
-              >
-                {{ p.name }}
-              </el-dropdown-item>
-              <el-dropdown-item v-if="!projectOptions.length" disabled>
-                No projects
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </el-dropdown>
+          <template v-if="!item.disabled">
+            <span class="menu-prefix">Current:</span>
+            <el-dropdown
+              trigger="click"
+              placement="bottom-start"
+              @command="(cmd) => $emit('switchProject', cmd)"
+            >
+              <span class="project-name-trigger" :title="currentProjectLabel" @click.stop>
+                <span class="project-name-text">{{ currentProjectLabel }}</span>
+                <i class="el-icon-arrow-down"></i>
+              </span>
+              <el-dropdown-menu slot="dropdown" class="project-switch-menu">
+                <el-dropdown-item
+                  v-for="p in projectOptions"
+                  :key="p.id"
+                  :command="p.id"
+                  :class="{ 'is-current': p.id === currentProjectId }"
+                >
+                  {{ p.name }}
+                </el-dropdown-item>
+                <el-dropdown-item v-if="!projectOptions.length" disabled>
+                  No projects
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </el-dropdown>
+          </template>
+          <span v-else class="menu-text" :title="item.name">{{ item.name }}</span>
         </div>
         <div class="menu-children">
           <div
@@ -112,6 +114,15 @@ export default {
     currentProjectId: {
       type: String,
       default: "",
+    },
+    currentProjectName: {
+      type: String,
+      default: "",
+    },
+  },
+  computed: {
+    currentProjectLabel() {
+      return this.currentProjectName || "project";
     },
   },
   methods: {
@@ -230,27 +241,42 @@ export default {
     font-style: italic;
   }
 
-  .switch-project-btn {
+  .menu-prefix {
     flex-shrink: 0;
-    margin-left: 6px;
-    padding: 2px 6px;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    background: #fff;
+    margin-right: 4px;
+  }
+
+  /deep/ .el-dropdown {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .project-name-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
     color: #0f766e;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
-    line-height: 1.4;
     cursor: pointer;
+    line-height: 1.4;
 
     &:hover {
-      border-color: #0f766e;
-      background: rgba(15, 118, 110, 0.06);
+      color: #0d9488;
+    }
+
+    .project-name-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .el-icon-arrow-down {
-      margin-left: 2px;
-      font-size: 10px;
+      flex-shrink: 0;
+      font-size: 12px;
     }
   }
 }

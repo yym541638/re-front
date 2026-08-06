@@ -137,6 +137,10 @@
 <script>
 import CommonHeader from "../components/common/Header.vue";
 import { BUSINESS_IDENTITIES, SYSTEM_ROLES, systemRoleDescription } from "../utils/roles";
+import {
+  captureInviteFromRouteQuery,
+  parseProjectIdFromInviteCode,
+} from "../utils/projectInvite";
 
 export default {
   name: "Register",
@@ -166,6 +170,14 @@ export default {
       return systemRoleDescription(this.form.systemRole);
     },
   },
+  created() {
+    const pending = captureInviteFromRouteQuery(this.$route.query);
+    const code = (pending && pending.inviteCode) || "";
+    // 公司邀请码可预填；项目级 CM-PROJ-* 留给登录后进项目，不作为公司邀请码
+    if (code && !parseProjectIdFromInviteCode(code)) {
+      this.form.invitationCode = code;
+    }
+  },
   watch: {
     "form.invitationCode"(val) {
       // 有公司邀请码 → 普通用户；新建公司 → 默认公司管理员
@@ -174,7 +186,10 @@ export default {
   },
   methods: {
     goToLogin() {
-      this.$router.push({ name: "login" });
+      this.$router.push({
+        name: "login",
+        query: { ...this.$route.query },
+      });
     },
     validate() {
       if (!this.form.firstName || !this.form.lastName) {
@@ -231,7 +246,10 @@ export default {
         const res = await this.$api.register(payload);
         if (res.code == 0) {
           this.$message.success("Registration successful");
-          this.$router.push({ name: "login" });
+          this.$router.push({
+            name: "login",
+            query: { ...this.$route.query },
+          });
         } else {
           this.$message({
             message: res.message || "Registration failed",

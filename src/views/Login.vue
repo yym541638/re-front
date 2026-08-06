@@ -107,6 +107,11 @@ import {
   extractSystemRole,
   refreshSystemRole,
 } from "../utils/roles";
+import { setCurrentProject } from "../utils/projectContext";
+import {
+  captureInviteFromRouteQuery,
+  applyPendingProjectInvite,
+} from "../utils/projectInvite";
 
 export default {
   name: "Login",
@@ -125,6 +130,9 @@ export default {
         email: "",
       },
     };
+  },
+  created() {
+    captureInviteFromRouteQuery(this.$route.query);
   },
   mounted() {
     this.$nextTick(() => {
@@ -195,8 +203,22 @@ export default {
                 : 0,
             ),
           );
+
+          const inviteResult = await applyPendingProjectInvite(
+            this.$api,
+            setCurrentProject,
+          );
+
           if (salt.data.purchase_status == 0) {
             this.$router.push({ path: "/purchase", query: { product: "soc2" } });
+          } else if (inviteResult.projectId) {
+            this.$router.push({
+              name: "ProjectOverview",
+              query: {
+                projectId: inviteResult.projectId,
+                projectName: inviteResult.projectName || "",
+              },
+            });
           } else {
             this.$router.push({ path: "/products", query: { product: "soc2" } });
           }
@@ -227,7 +249,10 @@ export default {
       });
     },
     signUp() {
-      this.$router.push({ name: "register" });
+      this.$router.push({
+        name: "register",
+        query: { ...this.$route.query },
+      });
     },
   },
 };

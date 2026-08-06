@@ -227,6 +227,7 @@
 
 <script>
 import { isCompAdmin, persistSystemRole } from "../../utils/roles";
+import { clearCurrentProject } from "../../utils/projectContext";
 
 export default {
   data() {
@@ -314,6 +315,7 @@ export default {
         "purchase_status",
         "system_role",
       ].forEach((k) => sessionStorage.removeItem(k));
+      clearCurrentProject();
       this.$store.commit("UPDATE_TAGS", [
         {
           name: "ProjectOverview",
